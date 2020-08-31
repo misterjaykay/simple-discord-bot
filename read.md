@@ -1,0 +1,1 @@
+https://discordjs.guide/creating-your-bot/commands-with-user-input.html#basic-arguments

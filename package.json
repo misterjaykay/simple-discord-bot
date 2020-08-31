@@ -1,0 +1,26 @@
+{
+  "name": "simple-discord-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "discord.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node discord.js",
+    "dev": "nodemon discord.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/misterjaykay/simple-discord-bot.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/misterjaykay/simple-discord-bot/issues"
+  },
+  "homepage": "https://github.com/misterjaykay/simple-discord-bot#readme",
+  "dependencies": {
+    "discord.js": "^12.3.1",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1"
+  }
+}
