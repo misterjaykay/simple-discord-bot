@@ -25,55 +25,49 @@ client.once("ready", () => {
   console.log("Ready!");
 });
 
-client.on("ready", () =>{
+client.on("ready", () => {
   console.log(`Logged in as ${client.user.tag}!`);
-  client.user.setPresence({
-      status: "online",  //You can show online, idle....
+  client.user
+    .setPresence({
+      status: "online", //You can show online, idle....
       activity: {
-          name: "도움이 필요할떈 !!help",  //The message shown
-          type: "WATCHING" //PLAYING: WATCHING: LISTENING: STREAMING:
-      }
-  }).then(console.log("Starting Bot"))
-  .catch(console.error);
-});;
+        name: "도움이 필요할떈 !!help", //The message shown
+        type: "WATCHING", //PLAYING: WATCHING: LISTENING: STREAMING:
+      },
+    })
+    .then(console.log("Starting Bot"))
+    .catch(console.error);
+});
 
 client.on("message", (message) => {
-  if (message.content === "유저확인") {
+  // prefix 없는 command
+  if (message.content.startsWith("시카")) {
+    message.channel.send("네에에");
+  }
 
-    var data = JSON.stringify(message.member.roles.guild.roles.cache, null, 2); // display datas
-
-    var dataObj = message.member.roles.member._roles; // displaying what role user have
+  // DM 을 거절하는 답장
+  if (message.channel.type === "dm" & (!message.author.bot) ) {
+    return message.reply("죄송합니다. 저는 현재 DM 을 받지 않고 있으며, DM 으로 명령어를 실행할수 없습니다. 문의사항이 있으면 rikimaru님께 DM 부탁드리겠습니다.");
+  }
   
-    if (dataObj.includes('749687210013491303') === false) {
-      message.channel.send('이 명령어를 실행시킬수 있는 권한이 없습니다.');
-    }
-    else {
-      console.log(message);
-      message.channel.send('이 명령어를 실행하겠습니다.')
-      .then(() => message.react('😄'))
-      .catch(() => console.error('One of the emojis failed to react.'));
-    
-     
-    if (message.content === '이 명령어를 실행하겠습니다.') {
-      console.log("확인");
-    }
-      
-      
-      // function reactTimer() {
-      //     if (message.content === '이 명령어를 실행하겠습니다.') {
-      //       console.log('working on react');
-      //       message.react('😄')
-      //       .then(() => message.react(':x:'))
-      //       .catch(() => console.error('One of the emojis failed to react.'));
-      //     }
-      //     else {
-      //       console.log('too fast');
-      //     }
-      // }
-      // reactTimer();
+  // 공지사항 // bot posts a notice message in fixed channel.
+  if (message.content === "TO BE UPDATED SOON") {
+    client.channels.fetch(`639853557226668052`)
+    .then(channel => channel.send(`안녕히가세요`))
+    .catch(console.error);
+  }
+
+  // role checker to what roles does user have.
+  if (message.content === "role check") {
+    console.log('another testing:\n', message.member.roles.member._roles);
+    if (message.member.roles.member._roles.includes("749687210013491303")) {
+      console.log("This memeber has this role.")
+    } else { 
+      console.log("Does not have this role.")
     }
   }
 
+  // 여기서 부터는 prefix 없이는 통과 못함
   if (!message.content.startsWith(prefix) || message.author.bot) return;
 
   const args = message.content.slice(prefix.length).trim().split(/ +/);
@@ -88,9 +82,8 @@ client.on("message", (message) => {
   if (!command) return;
 
   if (command.guildOnly && message.channel.type === "dm") {
-    return message.reply("I can't execute that command inside DMs!");
+    return message.reply("죄송합니다. 저는 현재 DM 을 받지 않고 있으며, DM 으로 명령어를 실행할수 없습니다. 문의사항이 있으면 rikimaru님께 DM 부탁드리겠습니다.");
   }
-
 
   if (command.args && !args.length) {
     let reply = `You didn't provide any arguments, ${message.author}!`;
@@ -101,8 +94,6 @@ client.on("message", (message) => {
 
     return message.channel.send(reply);
   }
-
-  
 
   if (!cooldowns.has(command.name)) {
     cooldowns.set(command.name, new Discord.Collection());
@@ -118,9 +109,9 @@ client.on("message", (message) => {
     if (now < expirationTime) {
       const timeLeft = (expirationTime - now) / 1000;
       return message.reply(
-        `please wait ${timeLeft.toFixed(
-          1
-        )} more second(s) before reusing the \`${command.name}\` command.`
+        `현재 ${timeLeft.toFixed(0)}초의 쿨다운이\`${
+          command.name
+        }\` 명령어에 있습니다. 나중에 사용해주세요.`
       );
     }
   }
@@ -134,7 +125,6 @@ client.on("message", (message) => {
     console.error(error);
     message.reply("there was an error trying to execute that command!");
   }
-  
 });
 
 client.login(process.env.BOT_TOKEN);
