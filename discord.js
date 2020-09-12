@@ -39,14 +39,26 @@ client.on("ready", () => {
     .catch(console.error);
 });
 
+// receiving commands/messages here
 client.on("message", (message) => {
+
+  // channel creation
+  if (message.content === "채널111" ) {
+    message.guild.channels.create('test', { type: "text", 
+     parent: "604455432324644891" })
+    .then((res) => {
+      console.log(`Channel name:${res.name}(type:${res.type}) has been successfully created.`);
+    })
+    .catch(console.error)
+  }
+  
   // prefix 없는 command
   if (message.content.startsWith("시카")) {
     message.channel.send("네에에");
   }
 
   // DM 을 거절하는 답장
-  if ((message.channel.type === "dm") & !message.author.bot) {
+  if ((message.channel.type === "dm") & (!message.author.bot)) {
     return message.reply(
       "죄송합니다. 저는 현재 DM 을 받지 않고 있으며, DM 으로 명령어를 실행할수 없습니다. 문의사항이 있으면 rikimaru님께 DM 부탁드리겠습니다."
     );
@@ -72,20 +84,6 @@ client.on("message", (message) => {
         )
         .catch(console.error);
     }
-    if (message.content === "답변ㅇㅇ") {
-      client.channels
-        .fetch(`673382653730357248`)
-        .then((channel) => channel.send(`알겠습니다.`))
-        .catch(console.error);
-    }
-    if (message.content === "답변ㄴㄴ") {
-      client.channels
-        .fetch(`673382653730357248`)
-        .then((channel) => channel.send(`안됩니다.`))
-        .catch(console.error);
-    }
-  } else {
-    message.reply("당신에게는 해당 권한이 없습니다.");
   }
 
   // role checker to see what roles does user have.
