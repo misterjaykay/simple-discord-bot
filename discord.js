@@ -42,6 +42,71 @@ client.on("ready", () => {
 // receiving commands/messages here
 client.on("message", (message) => {
 
+  if (message.content === "안녕") {
+    message.channel.send(
+      `안녕하세요 ${message.author}님`
+    )
+  }
+
+  if (message.content === "잘자") {
+    message.channel.send(
+      `좋은 꿈 꾸세요 ${message.author}님`
+    )
+  }
+
+  if (message.content.startsWith("뭐먹을까")) {
+    const argu = message.content.trim().split(/ +/);
+    console.log('1',argu[0],'\n2',argu[1]);
+
+    const numOneArr =[];
+    const numTwoArr = ["연어 스테이크","리조또","피자","봉골레 스파게티","크림 파스타","까르보나라"];
+    const numThreeArr = ["마파두부","꿔바로우","해물누룽지탕","짜장면","짬뽕","우육탕면","깐풍기"];
+    const numFourArr = [];
+    const numFiveArr = [];
+    let randomFood;
+
+    switch(argu[1]) {
+      
+      case "한식": 
+      randomFood = Math.floor(Math.random() * numOneArr.length);
+      message.channel.send("드세요")
+        break;
+
+      case "양식": 
+      randomFood = Math.floor(Math.random() * numTwoArr.length);
+      message.channel.send(`${numTwoArr[randomFood]}는 어떠신가요?`)
+        break;
+
+      case "중식": 
+      randomFood = Math.floor(Math.random() * numThreeArr.length);
+      message.channel.send(`${numThreeArr[randomFood]}는 어떠신가요?`)
+        break;
+
+      case "일식": 
+      randomFood = Math.floor(Math.random() * numFourArr.length);
+      message.channel.send("드세요")
+        break;
+
+      case "분식": 
+      randomFood = Math.floor(Math.random() * numFiveArr.length);
+      message.channel.send("드세요")
+        break;
+
+      default: message.channel.send("한식, 양식, 중식, 일식, 분식 중에 알려주셔야 답을 드릴수 있어요ㅠㅡㅠ")
+        break;
+    }
+    // if (!argu.length) {
+    //   "한식, 양식, 중식, 일식 중에 알려주셔야 답을 드릴수 있어요ㅠㅡㅠ"
+    // } 
+    // const foodArr = ["a","b","c","d","e","f","g","h","i","j"];
+    // let randomFood = Math.floor(Math.random() * foodArr.length);
+    // // for (i = 0; i < foodArr.length; i++) {
+    // // }
+    // message.channel.send(
+    //   `${foodArr[randomFood]}는 어떤가요?`
+    // )
+  }
+  
   // channel creation
   if (message.content === "채널111" ) {
     message.guild.channels.create('test', { type: "text", 
