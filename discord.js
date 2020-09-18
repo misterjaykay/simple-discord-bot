@@ -7,7 +7,10 @@ const guild = new Discord.Guild();
 
 client.commands = new Discord.Collection();
 const { prefix, token } = require("./config.json");
-const e = require("express");
+const axios = require("axios");
+const express = require("express");
+const app = express();
+// require("./routes/api-routes.js")(app);
 require("dotenv").config();
 
 const commandFiles = fs
@@ -31,8 +34,8 @@ client.on("ready", () => {
     .setPresence({
       status: "online", //You can show online, idle....
       activity: {
-        name: "도움이 필요할떈 !!help", //The message shown
-        type: "WATCHING", //PLAYING: WATCHING: LISTENING: STREAMING:
+        name: "명령어는 !!help", //The message shown
+        type: "PLAYING", //PLAYING: WATCHING: LISTENING: STREAMING:
       },
     })
     .then(console.log("Starting Bot"))
@@ -58,18 +61,23 @@ client.on("message", (message) => {
     const argu = message.content.trim().split(/ +/);
     console.log('1',argu[0],'\n2',argu[1]);
 
-    const numOneArr =[];
-    const numTwoArr = ["연어 스테이크","리조또","피자","봉골레 스파게티","크림 파스타","까르보나라"];
-    const numThreeArr = ["마파두부","꿔바로우","해물누룽지탕","짜장면","짬뽕","우육탕면","깐풍기"];
-    const numFourArr = [];
-    const numFiveArr = [];
+    const numOneArr =
+    ["갈비탕","순댓국","닭볶음탕","수제비","백숙","미역국","떡국","부대찌개","순두부찌개","김치찌개","갈비찜","카레"];
+    const numTwoArr = 
+    ["연어 스테이크","리조또","피자","봉골레 스파게티","크림 파스타","까르보나라"];
+    const numThreeArr = 
+    ["마파두부","꿔바로우","해물누룽지탕","짜장면","짬뽕","우육탕면","깐풍기"];
+    const numFourArr = 
+    ["돈부리","오니기리","우동","야끼소바","라멘","오코노미야키","타코야키","샤부샤부","스키야키","초밥","사시미","야키토리","카라아게"];
+    const numFiveArr = 
+    ["떡볶이","김말이","모듬튀김","오뎅","핫도그","순대","돈가스","잔치국수","라면","쫄면","만두","볶음밥"];
     let randomFood;
 
     switch(argu[1]) {
       
       case "한식": 
       randomFood = Math.floor(Math.random() * numOneArr.length);
-      message.channel.send("드세요")
+      message.channel.send(`${numOneArr[randomFood]}는 어떠신가요?`)
         break;
 
       case "양식": 
@@ -84,29 +92,21 @@ client.on("message", (message) => {
 
       case "일식": 
       randomFood = Math.floor(Math.random() * numFourArr.length);
-      message.channel.send("드세요")
+      message.channel.send(`${numFourArr[randomFood]}는 어떠신가요?`)
         break;
 
       case "분식": 
       randomFood = Math.floor(Math.random() * numFiveArr.length);
-      message.channel.send("드세요")
+      message.channel.send(`${numFiveArr[randomFood]}는 어떠신가요?`)
         break;
 
       default: message.channel.send("한식, 양식, 중식, 일식, 분식 중에 알려주셔야 답을 드릴수 있어요ㅠㅡㅠ")
         break;
     }
-    // if (!argu.length) {
-    //   "한식, 양식, 중식, 일식 중에 알려주셔야 답을 드릴수 있어요ㅠㅡㅠ"
-    // } 
-    // const foodArr = ["a","b","c","d","e","f","g","h","i","j"];
-    // let randomFood = Math.floor(Math.random() * foodArr.length);
-    // // for (i = 0; i < foodArr.length; i++) {
-    // // }
-    // message.channel.send(
-    //   `${foodArr[randomFood]}는 어떤가요?`
-    // )
   }
   
+
+
   // channel creation
   if (message.content === "채널111" ) {
     message.guild.channels.create('test', { type: "text", 
