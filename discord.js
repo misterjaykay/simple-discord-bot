@@ -104,8 +104,6 @@ client.on("message", (message) => {
         break;
     }
   }
-  
-
 
   // channel creation
   if (message.content === "채널111" ) {
