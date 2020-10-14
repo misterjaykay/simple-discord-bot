@@ -44,6 +44,13 @@ client.on("ready", () => {
 
 // receiving commands/messages here
 client.on("message", (message) => {
+  // // logging when using bot on localhost
+  // if (!message.author.bot) {
+  // fs.appendFile("log.txt", `\n${message.author.username}:'${message.content}', msgID:${message.id}`, (err) => {
+  //   if (err) throw err;
+  //   console.log("Message Logged.");
+  // })
+  // }
 
   if (message.content === "안녕") {
     message.channel.send(
@@ -54,6 +61,12 @@ client.on("message", (message) => {
   if (message.content === "잘자") {
     message.channel.send(
       `좋은 꿈 꾸세요 ${message.author}님`
+    )
+  }
+
+  if (message.content.includes("몇시")) {
+    message.channel.send(
+      "현재시간은 여기서 확인할수 있습니다.\nhttps://misterjaykay.github.io/livetime-app/"
     )
   }
 
