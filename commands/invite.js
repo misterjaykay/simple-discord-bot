@@ -1,5 +1,5 @@
 module.exports = {
-  name: "초대",
+  name: "현재 커맨드 없음",
   guildOnly: true,
   description: "Invites people who wants to play a game user mentioned.",
   execute(message, args) {

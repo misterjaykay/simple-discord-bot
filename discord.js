@@ -38,12 +38,25 @@ client.on("ready", () => {
         type: "PLAYING", //PLAYING: WATCHING: LISTENING: STREAMING:
       },
     })
-    .then(console.log("Starting Bot"))
+    .then(console.log("Listening"))
     .catch(console.error);
 });
 
 // receiving commands/messages here
 client.on("message", (message) => {
+  // AFK channel ID = 633096197502140426
+  if (message.content === "잠수봇") {
+    // const afkChannel = client.channels.get("633096197502140426");
+    // if (!afkChannel) return console.error("Channel Does Not Exist");
+    channel
+      .join("633096197502140426")
+      .then((connection) => {
+        console.log("Successfully Connected");
+      })
+      .catch((e) => {
+        console.error(e);
+      });
+  }
   // // logging when using bot on localhost
   // if (!message.author.bot) {
   // fs.appendFile("log.txt", `\n${message.author.username}:'${message.content}', msgID:${message.id}`, (err) => {
@@ -52,89 +65,165 @@ client.on("message", (message) => {
   // })
   // }
 
-  if (message.content === "안녕") {
-    message.channel.send(
-      `안녕하세요 ${message.author}님`
-    )
+  if (message.content === "qweaaaaaaaaaaaaaaar") {
+    message.channel
+      .createInvite(
+        {
+          channel: {
+            name: "Arcade 🎮",
+          },
+          unique: true,
+          maxAge: 1 * 60 * 1000, // maximum time for the invite, in milliseconds
+          maxUses: 10, // maximum times it can be used
+        },
+        `Requested with command by ${message.author.tag}`
+      )
+      .then((invite) => {
+        console.log(invite);
+        console.log(`Requested with command by ${message.author.tag}`);
+        message.channel.send(`Created an invite with a code of ${invite.code}`);
+        message.channel.send(`${invite}`);
+      })
+      .catch(console.error);
   }
 
-  if (message.content === "잘자") {
-    message.channel.send(
-      `좋은 꿈 꾸세요 ${message.author}님`
-    )
-  }
-
-  if (message.content.includes("몇시")) {
-    message.channel.send(
-      "현재시간은 여기서 확인할수 있습니다.\nhttps://misterjaykay.github.io/livetime-app/"
-    )
-  }
-
-  if (message.content.startsWith("뭐먹을까")) {
-    const argu = message.content.trim().split(/ +/);
-    console.log('1',argu[0],'\n2',argu[1]);
-
-    const numOneArr =
-    ["갈비탕","순댓국","닭볶음탕","수제비","백숙","미역국","떡국","부대찌개","순두부찌개","김치찌개","갈비찜","카레"];
-    const numTwoArr = 
-    ["연어 스테이크","리조또","피자","봉골레 스파게티","크림 파스타","까르보나라"];
-    const numThreeArr = 
-    ["마파두부","꿔바로우","해물누룽지탕","짜장면","짬뽕","우육탕면","깐풍기"];
-    const numFourArr = 
-    ["돈부리","오니기리","우동","야끼소바","라멘","오코노미야키","타코야키","샤부샤부","스키야키","초밥","사시미","야키토리","카라아게"];
-    const numFiveArr = 
-    ["떡볶이","김말이","모듬튀김","오뎅","핫도그","순대","돈가스","잔치국수","라면","쫄면","만두","볶음밥"];
-    let randomFood;
-
-    switch(argu[1]) {
-      
-      case "한식": 
-      randomFood = Math.floor(Math.random() * numOneArr.length);
-      message.channel.send(`${numOneArr[randomFood]}는 어떠신가요?`)
-        break;
-
-      case "양식": 
-      randomFood = Math.floor(Math.random() * numTwoArr.length);
-      message.channel.send(`${numTwoArr[randomFood]}는 어떠신가요?`)
-        break;
-
-      case "중식": 
-      randomFood = Math.floor(Math.random() * numThreeArr.length);
-      message.channel.send(`${numThreeArr[randomFood]}는 어떠신가요?`)
-        break;
-
-      case "일식": 
-      randomFood = Math.floor(Math.random() * numFourArr.length);
-      message.channel.send(`${numFourArr[randomFood]}는 어떠신가요?`)
-        break;
-
-      case "분식": 
-      randomFood = Math.floor(Math.random() * numFiveArr.length);
-      message.channel.send(`${numFiveArr[randomFood]}는 어떠신가요?`)
-        break;
-
-      default: message.channel.send("한식, 양식, 중식, 일식, 분식 중에 알려주셔야 답을 드릴수 있어요ㅠㅡㅠ")
-        break;
-    }
-  }
-
-  // channel creation
-  if (message.content === "채널111" ) {
-    message.guild.channels.create('test', { type: "text", 
-     parent: "604455432324644891" })
-    .then((res) => {
-      console.log(`Channel name:${res.name}(type:${res.type}) has been successfully created.`);
-    })
-    .catch(console.error)
-  }
-  
   // prefix 없는 command
   if (message.content.startsWith("시카")) {
     message.channel.send("네에에");
   }
 
+  // if (message.content.includes("하실")) {
+  //   message.channel.send("저요저요! 저도 데려가 주세요!");
+  // }
+
+  if (message.content === "안녕") {
+    message.channel.send(`안녕하세요 ${message.author}님`);
+  }
+
+  if (message.content === "잘자") {
+    message.channel.send(`좋은 꿈 꾸세요 ${message.author}님`);
+  }
+
+  if (message.content.includes("몇시")) {
+    message.channel.send(
+      "현재시간은 여기서 확인할수 있습니다.\nhttps://misterjaykay.github.io/livetime-app/"
+    );
+  }
+
+  if (message.content.startsWith("뭐먹을까")) {
+    const argu = message.content.trim().split(/ +/);
+    console.log("1", argu[0], "\n2", argu[1]);
+
+    const numOneArr = [
+      "갈비탕",
+      "순댓국",
+      "닭볶음탕",
+      "수제비",
+      "백숙",
+      "미역국",
+      "떡국",
+      "부대찌개",
+      "순두부찌개",
+      "김치찌개",
+      "갈비찜",
+      "카레",
+    ];
+    const numTwoArr = [
+      "연어 스테이크",
+      "리조또",
+      "피자",
+      "봉골레 스파게티",
+      "크림 파스타",
+      "까르보나라",
+    ];
+    const numThreeArr = [
+      "마파두부",
+      "꿔바로우",
+      "해물누룽지탕",
+      "짜장면",
+      "짬뽕",
+      "우육탕면",
+      "깐풍기",
+    ];
+    const numFourArr = [
+      "돈부리",
+      "오니기리",
+      "우동",
+      "야끼소바",
+      "라멘",
+      "오코노미야키",
+      "타코야키",
+      "샤부샤부",
+      "스키야키",
+      "초밥",
+      "사시미",
+      "야키토리",
+      "카라아게",
+    ];
+    const numFiveArr = [
+      "떡볶이",
+      "김말이",
+      "모듬튀김",
+      "오뎅",
+      "핫도그",
+      "순대",
+      "돈가스",
+      "잔치국수",
+      "라면",
+      "쫄면",
+      "만두",
+      "볶음밥",
+    ];
+    let randomFood;
+
+    switch (argu[1]) {
+      case "한식":
+        randomFood = Math.floor(Math.random() * numOneArr.length);
+        message.channel.send(`${numOneArr[randomFood]}는 어떠신가요?`);
+        break;
+
+      case "양식":
+        randomFood = Math.floor(Math.random() * numTwoArr.length);
+        message.channel.send(`${numTwoArr[randomFood]}는 어떠신가요?`);
+        break;
+
+      case "중식":
+        randomFood = Math.floor(Math.random() * numThreeArr.length);
+        message.channel.send(`${numThreeArr[randomFood]}는 어떠신가요?`);
+        break;
+
+      case "일식":
+        randomFood = Math.floor(Math.random() * numFourArr.length);
+        message.channel.send(`${numFourArr[randomFood]}는 어떠신가요?`);
+        break;
+
+      case "분식":
+        randomFood = Math.floor(Math.random() * numFiveArr.length);
+        message.channel.send(`${numFiveArr[randomFood]}는 어떠신가요?`);
+        break;
+
+      default:
+        message.channel.send(
+          "한식, 양식, 중식, 일식, 분식 중에 알려주셔야 답을 드릴수 있어요ㅠㅡㅠ"
+        );
+        break;
+    }
+  }
+
+  // channel creation
+  if (message.content === "채널111") {
+    message.guild.channels
+      .create("test", { type: "text", parent: "604455432324644891" })
+      .then((res) => {
+        console.log(
+          `Channel name:${res.name}(type:${res.type}) has been successfully created.`
+        );
+      })
+      .catch(console.error);
+  }
+
   // DM 을 거절하는 답장
-  if ((message.channel.type === "dm") & (!message.author.bot)) {
+  if ((message.channel.type == "dm") & !message.author.bot) {
     return message.reply(
       "죄송합니다. 저는 현재 DM 을 받지 않고 있으며, DM 으로 명령어를 실행할수 없습니다. 문의사항이 있으면 rikimaru님께 DM 부탁드리겠습니다."
     );
@@ -145,8 +234,8 @@ client.on("message", (message) => {
 
   // 공지사항 // bot posts a notice message in fixed channel.
   // Only admins can run this commands/arguments
-  if (message.member.roles.member._roles.includes("749687210013491303")) {
-    if (message.content === "공지사항") {
+  // if (message.member.roles.member._roles.includes("749687210013491303")) {
+    if (message.content == "공지사항") {
       client.channels
         .fetch(`673382653730357248`)
         .then((channel) =>
@@ -160,7 +249,7 @@ client.on("message", (message) => {
         )
         .catch(console.error);
     }
-  }
+  // }
 
   // role checker to see what roles does user have.
   if (message.content === "role check") {
