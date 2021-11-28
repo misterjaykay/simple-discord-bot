@@ -10,6 +10,7 @@ module.exports = {
   guildOnly: true,
   description: "마니또 상대 섞는 커맨드(한번만 사용할것)",
   execute(message, args) {
+    if (message.member.roles.member._roles.includes("608328294957318165")) {
     db.Person.find({})
       .then((res) => {
         // console.log(res, "found");
@@ -51,5 +52,8 @@ module.exports = {
         }
       })
       .catch((err) => console.log(err));
+    } else {
+      message.channel.send("당신은 관리자가 아니라 사용 불가능합니다.");
+    }
   },
 };
