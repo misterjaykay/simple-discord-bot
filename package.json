@@ -2,11 +2,12 @@
   "name": "simple-discord-bot",
   "version": "1.0.0",
   "description": "",
-  "main": "discord.js",
+  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node discord.js",
-    "dev": "nodemon discord.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "seed": "node db/seed.js"
   },
   "repository": {
     "type": "git",
@@ -19,9 +20,15 @@
   },
   "homepage": "https://github.com/misterjaykay/simple-discord-bot#readme",
   "dependencies": {
+    "@discordjs/builders": "^0.8.2",
     "axios": "^0.20.0",
-    "discord.js": "^12.3.1",
-    "dotenv": "^8.2.0",
-    "express": "^4.17.1"
+    "discord.js": "^12.5.3",
+    "dotenv": "^8.6.0",
+    "express": "^4.17.1",
+    "mongoose": "^6.0.13"
+  },
+  "devDependencies": {
+    "concurrently": "^6.4.0",
+    "nodemon": "^2.0.15"
   }
 }

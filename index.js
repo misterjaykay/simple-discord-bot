@@ -10,8 +10,20 @@ const { prefix, token } = require("./config.json");
 const axios = require("axios");
 const express = require("express");
 const app = express();
-// require("./routes/api-routes.js")(app);
 require("dotenv").config();
+
+const mongoose = require("mongoose");
+
+// mongoose.connect(process.env.MONGODB_URI, {
+mongoose.connect('mongodb://localhost/discord', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+}).then(res => {
+  console.log("Connected to DB")
+}).catch(err => {
+  console.log(err)
+});
+
 
 const commandFiles = fs
   .readdirSync("./commands")
@@ -34,7 +46,7 @@ client.on("ready", () => {
     .setPresence({
       status: "online", //You can show online, idle....
       activity: {
-        name: "명령어는 !!help", //The message shown
+        name: "명령어는 !help", //The message shown
         type: "PLAYING", //PLAYING: WATCHING: LISTENING: STREAMING:
       },
     })
@@ -65,6 +77,13 @@ client.on("message", (message) => {
   // })
   // }
 
+  if (message.content == "fooz") {
+    client.users.fetch('234086876061892608', false).then((user) => {
+      user.send('heloo');
+     });
+  }
+
+  // Creating Game Channel ( Currently Not Work / Future Work)
   if (message.content === "qweaaaaaaaaaaaaaaar") {
     message.channel
       .createInvite(
@@ -104,7 +123,7 @@ client.on("message", (message) => {
     message.channel.send(`좋은 꿈 꾸세요 ${message.author}님`);
   }
 
-  if (message.content.includes("몇시")) {
+  if (message.content.includes("몇시야")) {
     message.channel.send(
       "현재시간은 여기서 확인할수 있습니다.\nhttps://misterjaykay.github.io/livetime-app/"
     );
@@ -223,9 +242,9 @@ client.on("message", (message) => {
   }
 
   // DM 을 거절하는 답장
-  if ((message.channel.type == "dm") & !message.author.bot) {
+  if ((message.channel.type == "dm") && !message.author.bot && !message.content.includes('!whisp')) {
     return message.reply(
-      "죄송합니다. 저는 현재 DM 을 받지 않고 있으며, DM 으로 명령어를 실행할수 없습니다. 문의사항이 있으면 rikimaru님께 DM 부탁드리겠습니다."
+      "죄송합니다. 저는 현재 DM 을 받지 않고 있으며 (특정 명령어를 제외하고), DM 으로 명령어를 실행할수 없습니다. 문의사항이 있으면 rikimaru님께 DM 부탁드리겠습니다."
     );
   }
 
@@ -316,7 +335,7 @@ client.on("message", (message) => {
   setTimeout(() => timestamps.delete(message.author.id), cooldownAmount);
 
   try {
-    command.execute(message, args);
+    command.execute(message, args, client, mongoose);
   } catch (error) {
     console.error(error);
     message.reply("there was an error trying to execute that command!");
