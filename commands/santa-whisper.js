@@ -23,7 +23,7 @@ module.exports = {
             );
           });
         } else {
-          message.send("현재 당신의 마니또는 없습니다.");
+          message.reply("현재 당신의 마니또는 없습니다.");
         }
       })
       .catch((err) => console.log(err));
