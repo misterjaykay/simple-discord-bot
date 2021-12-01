@@ -7,10 +7,11 @@ module.exports = {
   guildOnly: true,
   description: "마니또 상대 확인용",
   execute(message, args, mongoose) {
+    const { id } = message.author;
     db.Person.find({
-      username: message.author.username,
+      userId: id,
     })
-      .then((res) => console.log(res, "found"))
+      .then((res) => console.log(res.santaGift, "found"))
       .catch((err) => console.log(err));
   },
 };
