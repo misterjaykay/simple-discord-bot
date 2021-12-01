@@ -5,7 +5,7 @@ module.exports = {
     description: "시크릿 산타 & 마니또 내 선물 정보 입력",
     execute(message, args, client, mongoose) {
         const { id } = message.author;
-        const sowon = "";
+        let sowon = "";
         for (let i = 0; i < args.length; i++) {
             const element = args[i] + " ";
             sowon += element;
