@@ -11,7 +11,7 @@ module.exports = {
     db.Person.find({
       userId: id,
     })
-      .then((res) => console.log(res.santaGift, "found"))
+      .then((res) => console.log(res, "found"))
       .catch((err) => console.log(err));
   },
 };
