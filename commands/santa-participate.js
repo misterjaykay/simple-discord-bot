@@ -39,8 +39,8 @@ module.exports = {
           person
             .save()
             .then((res) => {
-              console.log(`${user.userName} is saved to DB`); // Undefined
-              message.reply(`${user.userName} 참가 신청해주셔서 감사합니다.`);
+              console.log(`${res.userName} is saved to DB`); // Undefined
+              message.reply(`${res.userName} 참가 신청해주셔서 감사합니다.`);
             })
             .catch((err) => console.log(err));
         } else if (duplicate.length > 0) {
@@ -51,8 +51,8 @@ module.exports = {
             person
             .save()
             .then((res) => {
-              console.log(`${user.userName} is saved to DB`); // Undefined 
-              message.reply(`${user.userName} 참가 신청해주셔서 감사합니다.`);
+              console.log(`${res.userName} is saved to DB`); // Undefined 
+              message.reply(`${res.userName} 참가 신청해주셔서 감사합니다.`);
             })
             .catch((err) => console.log(err));
           }
