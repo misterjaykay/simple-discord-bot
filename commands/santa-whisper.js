@@ -22,6 +22,7 @@ module.exports = {
               `\`\`\`당신의 마니또가 보낸 메세지 입니다.\`\`\`\n ${userMsg}`
             );
           });
+          console.log('sent message', userMsg);
         } else {
           message.reply("현재 당신의 마니또는 없습니다.");
         }
