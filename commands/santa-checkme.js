@@ -6,7 +6,7 @@ module.exports = {
   cooldown: 5,
   guildOnly: true,
   description: "마니또 상대 확인용",
-  execute(message, args, mongoose, client) {
+  execute(message, args, client, mongoose) {
     const { id } = message.author;
     db.Person.findOne({
       userId: id,
@@ -16,8 +16,9 @@ module.exports = {
           userId: res.santaId,
         })
           .then((res) => {
+            console.log("res", res);
             if (res.santaId != null) {
-              client.users.fetch(res.userId, false).then((user) => {
+              client.users.fetch(id, false).then((user) => {
                 user.send(
                   `당신의 마니또는` +
                     `\`\`\`${res.userName}\`\`\`` +
@@ -27,9 +28,9 @@ module.exports = {
                     }\`\`\`` +
                     "입니다."
                 );
-                message.channel.send("귓속말로 보내드렸습니다.");
-                console.log(res.santaGift, "found");
               });
+                message.channel.send("귓속말로 보내드렸습니다.");
+                console.log(res, "found");
             } else {
               message.channel.send("당신의 마니또는 없습니다.");
             }
