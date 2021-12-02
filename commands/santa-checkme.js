@@ -16,7 +16,7 @@ module.exports = {
           userId: res.santaId,
         })
           .then((res) => {
-            if (res != null) {
+            if (res.santaId != null) {
               client.users.fetch(res.userId, false).then((user) => {
                 user.send(
                   `당신의 마니또는` +
