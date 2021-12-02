@@ -20,8 +20,9 @@ module.exports = {
           user.send(
             `\`\`\`당신의 마니또가 보낸 메세지 입니다.\`\`\`\n ${userMsg}`
           );
-        });
-        console.log("sent message", userMsg);
+          console.log("sent message", userMsg);
+        })
+        .catch(err => console.log(err));
       })
       .catch((err) => console.log(err));
   },
