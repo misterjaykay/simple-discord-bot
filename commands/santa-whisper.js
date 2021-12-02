@@ -40,6 +40,6 @@ module.exports = {
         .then((message) => message.delete());
       message.channel.send("당신의 메시지가 마니또에게 전송됐습니다.");
     }
-    setTimeout(deleteNotify, 2000);
+    setTimeout(deleteNotify, 500);
   },
 };
