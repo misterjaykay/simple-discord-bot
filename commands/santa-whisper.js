@@ -16,7 +16,7 @@ module.exports = {
           const element = args[i] + " ";
           userMsg += element;
         }
-        if (res.santaId) {
+        if (res.santaId != null) {
           client.users.fetch(target, false).then((user) => {
             user.send(
               `\`\`\`당신의 마니또가 보낸 메세지 입니다.\`\`\`\n ${userMsg}`
