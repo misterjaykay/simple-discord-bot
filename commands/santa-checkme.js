@@ -13,21 +13,28 @@ module.exports = {
     })
       .then((res) => {
         db.Person.findOne({
-          userId: res.userId
-        }).then(res => {
-          if (res != null) {
-            message.channel.send(`당신의 마니또는` +
-            `\`\`\`${res.userName}\`\`\`` +
-            "마니또의 소원은\n" +
-            `\`\`\`${(res.santaGift != null) ? res.santaGift : "없습니다"}\`\`\`` +
-            "입니다.")
-            console.log(res.santaGift, "found")
-          } 
-          else {
-            message.channel.send('당신의 마니또는 없습니다.')
-          }
+          userId: res.santaId,
         })
-        .catch(err => console.log(err));
+          .then((res) => {
+            if (res != null) {
+              client.users.fetch(res.userId, false).then((user) => {
+                user.send(
+                  `당신의 마니또는` +
+                    `\`\`\`${res.userName}\`\`\`` +
+                    "마니또의 소원은\n" +
+                    `\`\`\`${
+                      res.santaGift != null ? res.santaGift : "없습니다"
+                    }\`\`\`` +
+                    "입니다."
+                );
+                message.channel.send("귓속말로 보내드렸습니다.");
+                console.log(res.santaGift, "found");
+              });
+            } else {
+              message.channel.send("당신의 마니또는 없습니다.");
+            }
+          })
+          .catch((err) => console.log(err));
       })
       .catch((err) => console.log(err));
   },
