@@ -247,7 +247,8 @@ client.on("message", (message) => {
   if (
     message.channel.type == "dm" &&
     !message.author.bot &&
-    !message.content.includes("!whisp")
+    !message.content.includes("!귓") &&
+    !message.content.includes("!내마니또")
   ) {
     return message.reply(
       "죄송합니다. 저는 현재 DM 을 받지 않고 있으며 (특정 명령어를 제외하고), DM 으로 명령어를 실행할수 없습니다. 문의사항이 있으면 rikimaru님께 DM 부탁드리겠습니다."
