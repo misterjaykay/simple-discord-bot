@@ -2,7 +2,6 @@ module.exports = {
 	// name of command
 	name: '룰',
 	cooldown: 5,
-	guildOnly: true,
 	description: '마니또 룰 확인',
 	execute(message, args) {
 		message.channel.send(

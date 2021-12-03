@@ -4,7 +4,6 @@ module.exports = {
   // name of command
   name: "내마니또",
   cooldown: 5,
-  guildOnly: true,
   description: "마니또 상대 확인용",
   execute(message, args, client, mongoose) {
     const { id } = message.author;

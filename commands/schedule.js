@@ -2,7 +2,6 @@ module.exports = {
   name: "공지",
   expectedArgs: "<Channel tag>",
   cooldown: 5,
-  guildOnly: true,
   requiredPermission: ["ADMINISTRATOR"],
   execute(message, args, client) {
     if (message.member.roles.member._roles.includes("608328294957318165")) {

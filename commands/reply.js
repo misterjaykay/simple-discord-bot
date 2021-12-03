@@ -2,7 +2,6 @@ module.exports = {
   // name of command
   name: "답변",
   cooldown: 5,
-  guildOnly: true,
   description: "도움말",
   execute(message, args) {
     if (args[0] === "답변ㅇㅇ") {

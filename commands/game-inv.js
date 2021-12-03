@@ -1,8 +1,5 @@
-
-
 module.exports = {
   name: "초대",
-  guildOnly: true,
   description: "Invites people who wants to play a game user mentioned.",
   execute(message, args) {
     var dataObj = message.member.roles.member._roles; // displaying what role user have

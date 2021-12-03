@@ -2,7 +2,6 @@ module.exports = {
   // name of command
   name: "기간",
   cooldown: 5,
-  guildOnly: true,
   description: "마니또 기간 체크확인",
   execute(message, args) {
     let startStamp = 1638381600;

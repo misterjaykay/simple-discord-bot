@@ -2,7 +2,6 @@ module.exports = {
 	// name of command
 	name: 'help',
 	cooldown: 5,
-	guildOnly: true,
 	description: '도움말',
 	execute(message, args) {
 		message.channel.send('특별 마니또 명령어:' +

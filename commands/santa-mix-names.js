@@ -7,7 +7,6 @@ module.exports = {
   // name of command
   name: "마니또시작",
   cooldown: 5,
-  guildOnly: true,
   description: "마니또 상대 섞는 커맨드(한번만 사용할것)",
   execute(message, args) {
     if (message.member.roles.member._roles.includes("608328294957318165")) {
