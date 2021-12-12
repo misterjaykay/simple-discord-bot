@@ -38,7 +38,7 @@ module.exports = {
         //   console.log("what", res);
 
           for (let i = 0; i < res.choices.length; i++) {
-              replymsg += `\`\`\`${i}. ${res.choices[i].name} ${res.choices[i].poll}\n\`\`\``;
+              replymsg += `\`\`\`${i + 1}. ${res.choices[i].name} ${res.choices[i].poll}\n\`\`\``;
           }
           message.reply(replymsg);
         //   console.log(replymsg);
