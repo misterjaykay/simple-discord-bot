@@ -14,7 +14,7 @@ module.exports = {
       .then((res) => {
         // console.log("what", res.choices[0].name);
         for (let i = 0; i < res.choices.length; i++) {
-            replymsg += `\`\`\`${i}. ${res.choices[i].name}: ${res.choices[i].poll}\n\`\`\``;
+            replymsg += `\`\`\`${i + 1}. ${res.choices[i].name}: ${res.choices[i].poll}\n\`\`\``;
         }
       })
       .catch((err) => console.log(err));
