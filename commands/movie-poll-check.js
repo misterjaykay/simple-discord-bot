@@ -9,7 +9,7 @@ module.exports = {
     var replymsg = "현재 투표 결과입니다. \n";
 
     await db.Poll.findOne({
-      pollId: "919540067964432385",
+      pollId: "919541015923294278",
     })
       .then((res) => {
         // console.log("what", res.choices[0].name);
