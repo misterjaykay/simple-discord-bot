@@ -16,7 +16,7 @@ module.exports = {
       //   console.log(args[0]);
       message.channel.send("correct");
       db.Poll.findOne({
-        pollId: "919540067964432385",
+        pollId: "919541015923294278",
       })
         .then((res) => {
           //   console.log(res);
@@ -32,7 +32,7 @@ module.exports = {
         })
         .catch((err) => console.log(err));
       db.Poll.findOne({
-        pollId: "919540067964432385",
+        pollId: "919541015923294278",
       })
         .then((res) => {
         //   console.log("what", res);
