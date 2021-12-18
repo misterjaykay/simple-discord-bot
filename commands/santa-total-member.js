@@ -10,6 +10,8 @@ module.exports = {
     var total = [];
     var numb = "";
 
+    var steam = 
+
     db.Person.find({})
       .then((res) => {
         numb = res.length;
@@ -22,10 +24,23 @@ module.exports = {
           message.reply(`현재 참가자수는 0명 입니다. 얼른 참가하세요!`);
         } else {
             // console.log(total);
+            //  rikimaru님, Mingtodak님, Jesyka님, 은하수님, Swanii님, RP님, Bingsu님, Dotori님, harrykim님, Droo님, rekuel님, jjinramen님
           message.reply(
             `현재 참가자수는 ${numb}명 입니다. 얼른 참가하세요! \n 현재 참가자 명단: \n ${total.map(
               e => ' ' + e + '님' 
-            )}`
+            )}\n 
+            \`\`\`rikimaru님 -  https://steamcommunity.com/id/uramikir/\n\n` +
+            "Mingtodak님 -  https://steamcommunity.com/id/mcho0614/\n\n" +
+            "Jesyka님 -  https://steamcommunity.com/profiles/76561198986942804/ -주의- 이사람은 비공개라서 안보입니다.\n\n" +
+            "은하수님 -  rikikmaru 에게 귓주세요.\n\n" +
+            "Swanii님 -  rikikmaru 에게 귓주세요.\n\n" +
+            "RP님 -  https://steamcommunity.com/id/uramikir/\n\n" +
+            "Bingsu님 -  rikikmaru 에게 귓주세요.\n\n" +
+            "Dotori님 -  https://steamcommunity.com/id/dotorisan/\n\n" +
+            "harrykim님 -  https://steamcommunity.com/profiles/76561198079896019/\n\n" +
+            "Droo님 -  https://steamcommunity.com/id/33skillzone/\n\n" +
+            "rekuel님 -  https://steamcommunity.com/id/benny0129/\n\n" +
+            "jjinramen님 -  https://steamcommunity.com/profiles/76561198076517657/ \`\`\`"
           );
         }
       })

@@ -24,6 +24,7 @@ const pollSchema = new Schema({
     type: Date,
     default: Date.now,
   },
+  voters: [],
 });
 
 const Poll = mongoose.model("Poll", pollSchema);
