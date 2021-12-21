@@ -33,9 +33,9 @@ module.exports = {
             "Mingtodak님 -  https://steamcommunity.com/id/mcho0614/\n\n" +
             "Jesyka님 -  https://steamcommunity.com/profiles/76561198986942804/ -주의- 이사람은 비공개라서 안보입니다.\n\n" +
             "은하수님 -  rikikmaru 에게 귓주세요.\n\n" +
-            "Swanii님 -  rikikmaru 에게 귓주세요.\n\n" +
-            "RP님 -  https://steamcommunity.com/id/uramikir/\n\n" +
-            "Bingsu님 -  rikikmaru 에게 귓주세요.\n\n" +
+            "Swanii님 -  https://steamcommunity.com/profiles/76561198130516577/\n\n" +
+            "RP님 -  rikikmaru 에게 귓주세요.\n\n" +
+            "Bingsu님 -  공개 원치 않으심. 마니또는 따로 물어보셔야합니다.\n\n" +
             "Dotori님 -  https://steamcommunity.com/id/dotorisan/\n\n" +
             "harrykim님 -  https://steamcommunity.com/profiles/76561198079896019/\n\n" +
             "Droo님 -  https://steamcommunity.com/id/33skillzone/\n\n" +
