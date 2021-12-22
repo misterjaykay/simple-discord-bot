@@ -19,7 +19,7 @@ module.exports = {
         pollId: "919541015923294278",
       })
         .then((res) => {
-          //   console.log(res);
+            // console.log(res);
           const value = res.choices[userpick];
           const id = res.choices[userpick].poll;
           //   console.log("value", value, id);
@@ -28,6 +28,7 @@ module.exports = {
             { $set: { "choices.$.poll": id + 1 } }
           )
             .then((res) => {
+              console.log(res,"toopyo");
                 db.Poll.findOne({
                     pollId: "919541015923294278",
                   })

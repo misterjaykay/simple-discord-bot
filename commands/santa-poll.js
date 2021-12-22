@@ -37,13 +37,18 @@ module.exports = {
           pollId: "921863696232353822", // need pollId
         })
           .then((res) => {
+            console.log(res,"res is here");
             const value = res.choices[userpick];
             const id = res.choices[userpick].poll;
+            console.log("--------------", value, id);
             db.Poll.updateOne(
+              // { _id: value._id },
               { "choices.id": userpick },
-              { $set: { "choices.$.poll": id + 1 } }
+              { $set: { "choices.$.poll": id + 1 } },
+              { new: true }
             )
               .then((res) => {
+                console.log('res two is heree', res);
                 db.Poll.findOne({
                   pollId: "921863696232353822", // need pollId
                 })
