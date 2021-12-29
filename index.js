@@ -109,9 +109,10 @@ client.on("message", (message) => {
   }
 
   // prefix 없는 command
-  if (message.content.startsWith("시카")) {
-    message.channel.send("네에에");
-  }
+  // Disabled b/c of too many spams.
+  // if (message.content.startsWith("시카")) {
+  //   message.channel.send("네에에");
+  // }
 
   if (message.content.includes("하실분")) {
     message.channel.send("저요저요! 저도 데려가 주세요!");
