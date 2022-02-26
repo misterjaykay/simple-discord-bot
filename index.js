@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 const client = new Discord.Client();
 const role = new Discord.Role();
 const guild = new Discord.Guild();
+// const member = new Discord.GuildMember();
 // const presence = new Discord.Presence();
 
 client.commands = new Discord.Collection();
@@ -343,7 +344,7 @@ client.on("message", (message) => {
   setTimeout(() => timestamps.delete(message.author.id), cooldownAmount);
 
   try {
-    command.execute(message, args, client, mongoose);
+    command.execute(message, args, client, mongoose, guild);
   } catch (error) {
     console.error(error);
     message.reply("there was an error trying to execute that command!");
