@@ -1,9 +1,8 @@
-const fs = require("fs");
+const fs = require('node:fs');
 const path = require('node:path');
-const Discord = require("discord.js");
 
 // Require the necessary discord.js classes
-const { Client, Collection, Events, GatewayIntentBits, ActivityType, Role, Guild, ChannelType, PermissionFlagsBits } = require('discord.js');
+const { Client, Collection, Events, GatewayIntentBits, Role, Guild, ChannelType, ActionRowBuilder, SelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
 // Create a new client instance
 const client = new Client({ intents: [    
@@ -20,7 +19,7 @@ const client = new Client({ intents: [
 // const member = new Discord.GuildMember();
 // const presence = new Discord.Presence();
 
-client.commands = new Discord.Collection();
+client.commands = new Collection();
 const { prefix, token } = require("./config.json");
 const axios = require("axios");
 const express = require("express");
@@ -57,18 +56,6 @@ for (const file of commandFiles) {
 		console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
 	}
 }
-
-client.once(Events.ClientReady, c => {
-	console.log(`Ready!\n Logged in as ${c.user.tag}`);
-});
-
-client.on(Events.ClientReady, c => {
-  // ActivityType: Competing, Listening, Playing, Streaming, Watching
-  client.user.setPresence({
-    activities: [{ name: `명령어는 !!!help`, type: ActivityType.Playing }], 
-    status: 'online',
-  });
-});
 
 client.on('voiceStateUpdate', async (oldUser, newUser) => {
     let mainCatagory = '600398231599579168';
@@ -134,21 +121,85 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
-	if (!interaction.isChatInputCommand()) return;
+    if (!interaction.isModalSubmit()) return;
 
-	const command = interaction.client.commands.get(interaction.commandName);
-
-	if (!command) {
-		console.error(`No command matching ${interaction.commandName} was found.`);
-		return;
+    if (interaction.customId === 'myModal') {
+        const favoriteColor = interaction.fields.getTextInputValue('favoriteColorInput');
+        const hobbies = interaction.fields.getTextInputValue('hobbiesInput');
+        console.log({ favoriteColor, hobbies });
+		await interaction.reply({ content: 'Your submission was received successfully!' });
 	}
 
-	try {
-		await command.execute(interaction);
-	} catch (error) {
-		console.error(error);
-		await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+    if (interaction.commandName == 'ahoho') {
+		// Create the modal
+		const modal = new ModalBuilder()
+			.setCustomId('myModal')
+			.setTitle('My Modal');
+
+		// Add components to modal
+
+		// Create the text input components
+		// const favoriteColorInput = new TextInputBuilder()
+		// 	.setCustomId('favoriteColorInput')
+		//     // The label is the prompt the user sees for this input
+		// 	.setLabel("What's your favorite color?")
+		//     // Short means only a single line of text
+		// 	.setStyle(TextInputStyle.Short);
+
+        const favoriteColorInput = new SelectMenuBuilder()
+            .setCustomId('select')
+            .setPlaceholder('Nothing selected')
+            .setMinValues(2)
+            .setMaxValues(3)
+            .addOptions([
+                {
+                    label: 'Select me',
+                    description: 'This is a description',
+                    value: 'first_option',
+                },
+                {
+                    label: 'You can select me too',
+                    description: 'This is also a description',
+                    value: 'second_option',
+                },
+                {
+                    label: 'I am also an option',
+                    description: 'This is a description as well',
+                    value: 'third_option',
+                },
+            ]);
+        
+
+		const hobbiesInput = new TextInputBuilder()
+			.setCustomId('hobbiesInput')
+			.setLabel("What's some of your favorite hobbies?")
+		    // Paragraph means multiple lines of text.
+			.setStyle(TextInputStyle.Paragraph);
+
+		// An action row only holds one text input,
+		// so you need one action row per text input.
+		const firstActionRow = new ActionRowBuilder().addComponents(favoriteColorInput);
+		const secondActionRow = new ActionRowBuilder().addComponents(hobbiesInput);
+
+		// Add inputs to the modal
+		modal.addComponents(firstActionRow, secondActionRow);
+
+		// Show the modal to the user
+		await interaction.showModal(modal);
 	}
 });
+
+const eventsPath = path.join(__dirname, 'events');
+const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
+
+for (const file of eventFiles) {
+	const filePath = path.join(eventsPath, file);
+	const event = require(filePath);
+	if (event.once) {
+		client.once(event.name, (...args) => event.execute(...args));
+	} else {
+		client.on(event.name, (...args) => event.execute(...args));
+	}
+}
 
 client.login(process.env.BOT_TOKEN);
