@@ -1,9 +1,8 @@
+const { SlashCommandBuilder } = require("discord.js");
+
 module.exports = {
-	name: 'server',
-	description: '서버',
-	execute(message, args) {
-		message.channel.send(
-            `해당서버의 이름은 ${message.guild.name}\n현재 참여인원수는 ${message.guild.memberCount}명입니다.`
-          );
-	},
+  data: new SlashCommandBuilder().setName("서버").setDescription("서버 정보를 보여줍니다."),
+  async execute(interaction) {
+    return interaction.reply(`해당 서버의 이름은 ${interaction.guild.name}\n현재 참여인원수는 ${interaction.guild.memberCount}명입니다.`);
+  },
 };

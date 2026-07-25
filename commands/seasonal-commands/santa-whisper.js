@@ -1,45 +1,25 @@
-const db = require("../models");
+const { SlashCommandBuilder } = require("discord.js");
+const db = require("../../models");
 
 module.exports = {
-  name: "귓",
-  description: "whisper",
-  execute(message, args, client, mongoose) {
-    const user = message.author;
-    db.Person.findOne({
-      userId: user.id,
-    })
-      .then((res) => {
-        // console.log(res);
-        const target = res.santaId;
-        // console.log(target);
-        let userMsg = "";
-        for (let i = 0; i < args.length; i++) {
-          const element = args[i] + " ";
-          userMsg += element;
-        }
-        if (res.santaId != null) {
-          client.users
-            .fetch(target, false)
-            .then((user) => {
-              user.send(
-                `당신의 마니또가 보낸 메세지 입니다.\`\`\`${userMsg}\`\`\``
-              );
-              console.log("sent message", userMsg);
-            })
-            .catch((err) => console.log(err));
-        } else {
-          message.channel.send("마니또가 없네요? 왜지?");
-        }
-      })
-      .catch((err) => console.log(err));
-
-    function deleteNotify() {
-      client.channels.cache
-        .get(message.channel.id)
-        .messages.fetch(message.id)
-        .then((message) => message.delete());
-      message.channel.send("당신의 메시지가 마니또에게 전송됐습니다.");
+  deprecated: true, // Old seasonal (Secret Santa) command, unused for now — hidden from command loading.
+  data: new SlashCommandBuilder()
+    .setName("귓")
+    .setDescription("내 마니또에게 익명으로 메시지를 보냅니다.")
+    .addStringOption((opt) => opt.setName("내용").setDescription("보낼 메시지").setRequired(true)),
+  async execute(interaction) {
+    const content = interaction.options.getString("내용");
+    try {
+      const me = await db.Person.findOne({ userId: interaction.user.id });
+      if (!me || !me.santaId) {
+        return interaction.reply({ content: "마니또가 없네요? 왜지?", ephemeral: true });
+      }
+      const target = await interaction.client.users.fetch(me.santaId);
+      await target.send(`당신의 마니또가 보낸 메세지 입니다.\`\`\`${content}\`\`\``);
+      return interaction.reply({ content: "당신의 메시지가 마니또에게 전송됐습니다.", ephemeral: true });
+    } catch (err) {
+      console.error(err);
+      return interaction.reply({ content: "메시지를 보내는 중 오류가 발생했습니다.", ephemeral: true });
     }
-    setTimeout(deleteNotify, 500);
   },
 };

@@ -1,34 +1,53 @@
-const { REST, Routes } = require('discord.js');
-const { clientId, guildId, token } = require('./config.json');
-const fs = require('node:fs');
+require("dotenv").config();
+const fs = require("node:fs");
+const path = require("node:path");
+const { REST, Routes } = require("discord.js");
 
-const commands = [];
-// Grab all the command files from the commands directory you created earlier
-const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
+const { BOT_TOKEN, CLIENT_ID, GUILD_ID } = process.env;
 
-// Grab the SlashCommandBuilder#toJSON() output of each command's data for deployment
-for (const file of commandFiles) {
-	const command = require(`./commands/${file}`);
-	commands.push(command.data.toJSON());
+if (!BOT_TOKEN || !CLIENT_ID) {
+  console.error("BOT_TOKEN and CLIENT_ID must be set in your .env file before deploying commands.");
+  process.exit(1);
 }
 
-// Construct and prepare an instance of the REST module
-const rest = new REST({ version: '10' }).setToken(process.env.token);
+const commands = [];
 
-// and deploy your commands!
+// Recursively collect every command file, including commands/seasonal-commands
+// (the old script only read the top-level commands/ folder).
+function collectCommands(dir) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectCommands(fullPath);
+      continue;
+    }
+    if (!entry.name.endsWith(".js")) continue;
+
+    const command = require(fullPath);
+    if (command.deprecated) continue;
+    if (!("data" in command)) continue;
+
+    commands.push(command.data.toJSON());
+  }
+}
+
+collectCommands(path.join(__dirname, "commands"));
+
+const rest = new REST().setToken(BOT_TOKEN);
+
 (async () => {
-	try {
-		console.log(`Started refreshing ${commands.length} application (/) commands.`);
+  try {
+    console.log(`Started refreshing ${commands.length} application (/) commands.`);
 
-		// The put method is used to fully refresh all commands in the guild with the current set
-		const data = await rest.put(
-			Routes.applicationGuildCommands(process.env.clientId, process.envguildId),
-			{ body: commands },
-		);
+    // Deploy to a single guild (instant) if GUILD_ID is set, otherwise deploy globally
+    // (can take up to an hour to propagate).
+    const route = GUILD_ID ? Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID) : Routes.applicationCommands(CLIENT_ID);
 
-		console.log(`Successfully reloaded ${data.length} application (/) commands.`);
-	} catch (error) {
-		// And of course, make sure you catch and log any errors!
-		console.error(error);
-	}
+    const data = await rest.put(route, { body: commands });
+
+    console.log(`Successfully reloaded ${data.length} application (/) commands.`);
+  } catch (error) {
+    console.error(error);
+  }
 })();

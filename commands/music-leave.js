@@ -1,11 +1,14 @@
-module.exports = {
-  name: "스톱",
-  description: "음악재생 멈추기",
-  async execute(message, args) {
-    const voiceChannel = message.member.voice.channel;
+const { SlashCommandBuilder } = require("discord.js");
+const { getVoiceConnection } = require("@discordjs/voice");
 
-    if (!voiceChannel) return message.channel.send("채널에 있지 않습니다.");
-    await voiceChannel.leave();
-    await message.channel.send("음악을 멈추고 채널에서 나갑니다. :D");
+module.exports = {
+  data: new SlashCommandBuilder().setName("스톱").setDescription("음악 재생을 멈추고 채널에서 나갑니다."),
+  async execute(interaction) {
+    const connection = getVoiceConnection(interaction.guild.id);
+    if (!connection) {
+      return interaction.reply({ content: "재생 중인 채널이 없습니다.", ephemeral: true });
+    }
+    connection.destroy();
+    return interaction.reply("음악을 멈추고 채널에서 나갑니다. :D");
   },
 };

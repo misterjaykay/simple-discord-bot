@@ -1,66 +1,84 @@
-const ytdl = require("ytdl-core");
+const { SlashCommandBuilder } = require("discord.js");
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, getVoiceConnection, entersState } = require("@discordjs/voice");
+const ytdl = require("@distube/ytdl-core");
 const ytSearch = require("yt-search");
 
+const isUrl = (str) => {
+  try {
+    new URL(str);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 module.exports = {
-  name: "재생",
-  description: "음악 재생",
-  async execute(message, args) {
-    const voiceChannel = message.member.voice.channel;
-
-    if (!voiceChannel) return message.channel.send("채널에 있지 않습니다.");
-    const permissions = voiceChannel.permissionsFor(message.client.user);
-    if (!permissions.has("CONNECT"))
-      return message.channel.send("권한이 없습니다.");
-    if (!permissions.has("SPEAK"))
-      return message.channel.send("권한이 없습니다.");
-
-    if (!args.length) return message.channel.send("Argument Needed");
-
-    const validURL = (str) => {
-        var regex = /(http|https):\/\/(\w+:{0,1}\w*)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%!\-\/]))?/;
-        if (!regex.test(str)) {
-            return false;
-        } else {
-            return true;
-        }
+  data: new SlashCommandBuilder()
+    .setName("재생")
+    .setDescription("음성 채널에서 음악을 재생합니다.")
+    .addStringOption((opt) => opt.setName("검색어").setDescription("유튜브 링크 또는 검색어").setRequired(true)),
+  async execute(interaction) {
+    const voiceChannel = interaction.member.voice.channel;
+    if (!voiceChannel) {
+      return interaction.reply({ content: "먼저 음성 채널에 입장해주세요.", ephemeral: true });
     }
 
-    if(validURL(args[0])) {
-        message.channel.send('You entered a correct url!');
-
-        const connection = await voiceChannel.join();
-        const stream = ytdl(args[0], { filter: 'audioonly'});
-
-        connection.play(stream, {seek: 0, volume: 1})
-        .on('finish', () => {
-            voiceChannel.leave();
-            message.channel.send('leaving channel');
-        });
-
-        await message.reply('Now Playing ***Your Link***');
-
-        return
+    const permissions = voiceChannel.permissionsFor(interaction.client.user);
+    if (!permissions.has("Connect") || !permissions.has("Speak")) {
+      return interaction.reply({ content: "이 채널에서 음성 재생 권한이 없습니다.", ephemeral: true });
     }
 
-    const connection = await voiceChannel.join();
+    const query = interaction.options.getString("검색어");
+    await interaction.deferReply();
 
-    const videoFinder = async (query) => {
-      const videoResult = await ytSearch(query);
+    let videoUrl = query;
+    let title = "요청하신 링크";
 
-      return videoResult.videos.length > 1 ? videoResult.videos[0] : null;
-    };
+    if (!isUrl(query)) {
+      const searchResult = await ytSearch(query);
+      const video = searchResult.videos?.[0];
+      if (!video) {
+        return interaction.editReply("검색 결과를 찾을 수 없습니다.");
+      }
+      videoUrl = video.url;
+      title = video.title;
+    }
 
-    const video = await videoFinder(args.join(" "));
+    let connection = getVoiceConnection(interaction.guild.id);
+    if (!connection) {
+      connection = joinVoiceChannel({
+        channelId: voiceChannel.id,
+        guildId: interaction.guild.id,
+        adapterCreator: interaction.guild.voiceAdapterCreator,
+      });
+      try {
+        await entersState(connection, VoiceConnectionStatus.Ready, 10_000);
+      } catch (err) {
+        connection.destroy();
+        console.error(err);
+        return interaction.editReply("음성 채널에 연결하지 못했습니다.");
+      }
+    }
 
-    if (video) {
-      const stream = ytdl(video.url, { finder: "audioonly" });
-      connection.play(stream, { seek: 0, volume: 1 }).on("finish", () => {
-        voiceChannel.leave();
+    try {
+      const stream = ytdl(videoUrl, { filter: "audioonly", highWaterMark: 1 << 25 });
+      const resource = createAudioResource(stream);
+      const player = createAudioPlayer();
+
+      player.play(resource);
+      connection.subscribe(player);
+
+      player.once(AudioPlayerStatus.Idle, () => connection.destroy());
+      player.on("error", (err) => {
+        console.error("Audio player error:", err);
+        connection.destroy();
       });
 
-      await message.reply(`Now Playing ***${video.title}***`);
-    } else {
-      message.channel.send("No Video results found");
+      return interaction.editReply(`재생을 시작합니다: **${title}**`);
+    } catch (err) {
+      console.error(err);
+      connection.destroy();
+      return interaction.editReply("음악을 재생하는 중 오류가 발생했습니다.");
     }
   },
 };

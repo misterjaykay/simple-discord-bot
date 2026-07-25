@@ -1,58 +1,44 @@
-const db = require("../models");
+const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const db = require("../../models");
 
-// Returns a random integer from 0 to 9:
-// Math.floor(Math.random() * 10);
+function shuffle(array) {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
 module.exports = {
-  // name of command
-  name: "마니또시작",
-  cooldown: 5,
-  description: "마니또 상대 섞는 커맨드(한번만 사용할것)",
-  execute(message, args) {
-    if (message.member.roles.member._roles.includes("608328294957318165")) {
-    db.Person.find({})
-      .then((res) => {
-        // console.log(res, "found");
-        var allUserId = []; // array of user ids
-        for (let h = 0; h < res.length; h++) {
-          allUserId.push(res[h].userId);
-        }
-        // console.log(allUserId);
+  deprecated: true, // Old seasonal (Secret Santa) command, unused for now — hidden from command loading.
+  data: new SlashCommandBuilder()
+    .setName("마니또시작")
+    .setDescription("마니또 상대를 섞습니다. (한 번만 사용하세요, 관리자 전용)")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  async execute(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    try {
+      const people = await db.Person.find({});
+      if (people.length < 2) {
+        return interaction.editReply("참가자가 2명 이상이어야 마니또를 시작할 수 있습니다.");
+      }
 
-        for (let i = 0; i < res.length; i++) {
-          const filter = allUserId.filter(e => e != res[i].userId);
-          // console.log("filtered", filter);
-          const index = Math.floor(Math.random() * filter.length);
-          const userId = res[i].userId;
-          const santaId = filter[index];
-          // console.log("USER ID", userId, "SANTA ID", santaId);
+      // Shuffle then pair each person with the next one in the circle - this
+      // guarantees nobody is assigned to themselves (the old random-pick-and-remove
+      // logic could still end up doing that on the last remaining participant).
+      const shuffled = shuffle(people);
+      await Promise.all(
+        shuffled.map((person, i) => {
+          const santa = shuffled[(i + 1) % shuffled.length];
+          return db.Person.updateOne({ userId: person.userId }, { $set: { santaId: santa.userId } });
+        })
+      );
 
-          // if (i != index) {
-          if (userId != santaId) {
-            db.Person.findOneAndUpdate(
-              { userId: userId },
-              { $set: { santaId: santaId } },
-              { new: true }
-            ) 
-              .then((res) => console.log("Updated", res.userId, res.santaId))
-              .catch((res) => console.log("Update Failed", res));
-            }
-          
-          const santaIdNumber = (e) => e == santaId;
-          const findId = allUserId.findIndex(santaIdNumber);
-          // console.log(findId);
-
-          allUserId.splice(findId, 1);
-  
-          // save
-          // if (userId != santaId) {
-
-          // filter out user id
-        }
-      })
-      .catch((err) => console.log(err));
-    } else {
-      message.channel.send("당신은 관리자가 아니라 사용 불가능합니다.");
+      return interaction.editReply(`${people.length}명의 마니또 상대가 배정되었습니다!`);
+    } catch (err) {
+      console.error(err);
+      return interaction.editReply("마니또를 섞는 중 오류가 발생했습니다.");
     }
   },
 };

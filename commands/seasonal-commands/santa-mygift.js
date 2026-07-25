@@ -1,29 +1,20 @@
-const db = require("../models");
+const { SlashCommandBuilder } = require("discord.js");
+const db = require("../../models");
 
 module.exports = {
-  name: "소원",
-  description: "시크릿 산타 & 마니또 내 선물 정보 입력",
-  execute(message, args, client, mongoose) {
-    const { id } = message.author;
-    let sowon = "";
-    for (let i = 0; i < args.length; i++) {
-      const element = args[i] + " ";
-      sowon += element;
+  deprecated: true, // Old seasonal (Secret Santa) command, unused for now — hidden from command loading.
+  data: new SlashCommandBuilder()
+    .setName("소원")
+    .setDescription("내 선물 소원을 등록합니다.")
+    .addStringOption((opt) => opt.setName("내용").setDescription("받고 싶은 선물").setRequired(true)),
+  async execute(interaction) {
+    const wish = interaction.options.getString("내용");
+    try {
+      await db.Person.findOneAndUpdate({ userId: interaction.user.id }, { $set: { santaGift: wish } });
+      return interaction.reply({ content: "당신의 소원이 등록되었습니다.", ephemeral: true });
+    } catch (err) {
+      console.error(err);
+      return interaction.reply({ content: "등록하는 중 오류가 발생했습니다.", ephemeral: true });
     }
-
-    db.Person.findOneAndUpdate(
-      { userId: id },
-      { $set: { santaGift: sowon } },
-      { new: true }
-    )
-      .then((res) => {
-        client.channels.cache
-          .get(message.channel.id)
-          .messages.fetch(message.id)
-          .then((message) => message.delete());
-        message.channel.send("당신의 소원이 등록되었습니다.");
-        console.log("Updated Sowon\n", sowon, `\n${res}`);
-      })
-      .catch((err) => console.log(err));
   },
 };

@@ -1,30 +1,16 @@
+const { SlashCommandBuilder, PermissionFlagsBits, ChannelType } = require("discord.js");
+
 module.exports = {
-  name: "공지",
-  expectedArgs: "<Channel tag>",
-  cooldown: 5,
-  requiredPermission: ["ADMINISTRATOR"],
-  execute(message, args, client) {
-    if (message.member.roles.member._roles.includes("608328294957318165")) {
-      const target = message.mentions.channels.first().id;
-      let announce = "";
-
-      for (let i = 0; i < args.length; i++) {
-        if (i != 0) {
-        const element = args[i] + " ";
-        announce += element;
-        }
-      }
-
-      client.channels
-        .fetch(target, false)
-        .then((channel) => {
-          channel.send(announce);
-        })
-        .catch((err) => console.log("Error => ", err));
-      console.log("This member have this role.");
-    } else {
-      message.channel.send("당신은 관리자가 아니라 사용 불가능합니다.");
-      console.log("This member does not have this role.");
-    }
+  data: new SlashCommandBuilder()
+    .setName("공지")
+    .setDescription("지정한 채널에 공지를 보냅니다.")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addChannelOption((opt) => opt.setName("채널").setDescription("공지를 보낼 채널").addChannelTypes(ChannelType.GuildText).setRequired(true))
+    .addStringOption((opt) => opt.setName("내용").setDescription("공지 내용").setRequired(true)),
+  async execute(interaction) {
+    const channel = interaction.options.getChannel("채널");
+    const content = interaction.options.getString("내용");
+    await channel.send(content);
+    return interaction.reply({ content: `${channel}에 공지를 보냈습니다.`, ephemeral: true });
   },
 };

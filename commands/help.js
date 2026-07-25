@@ -1,14 +1,19 @@
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+
 module.exports = {
-	// name of command
-	name: 'help',
-	cooldown: 5,
-	description: '도움말',
-	execute(message, args) {
-		message.channel.send('특별 마니또 명령어:' +
-		"\n\`\`\`!참가\n!룰\n!기간\n!내마니또\n!참가자\n!귓 <내용>\`\`\`\n" +
-		"Prefix 없는 명령어 (!없이 쓰는 명령어):" +
-		"\n\`\`\`\n안녕\n잘자\n뭐먹을까 <한식/양식/중식/일식/분식>\n시카\`\`\`\n" +
-		"Prefix 있는 명령어 (!필요한 명령어):" +
-		"\`\`\`\n!!티어 <소환사명>\n서버\`\`\`");
-	},
+  data: new SlashCommandBuilder().setName("help").setDescription("사용 가능한 명령어 목록을 보여줍니다."),
+  async execute(interaction) {
+    const embed = new EmbedBuilder()
+      .setTitle("사용 가능한 명령어")
+      .setColor(0x5865f2)
+      .addFields(
+        { name: "마니또", value: "`/참가` `/룰` `/기간` `/내마니또` `/참가자` `/귓` `/소원`" },
+        { name: "생일 / MBTI", value: "`/생일추가` `/mbti`" },
+        { name: "투표", value: "`/영화투표만들기` `/투표` `/투표확인` `/날짜투표` `/날짜투표확인`" },
+        { name: "음악", value: "`/재생` `/스톱`" },
+        { name: "보이스마스터", value: "`/보이스마스터-설정` (관리자) `/보이스채널`" },
+        { name: "기타", value: "`/티어` `/서버` `/게임초대` `/kick` `/공지` (관리자)" }
+      );
+    return interaction.reply({ embeds: [embed] });
+  },
 };

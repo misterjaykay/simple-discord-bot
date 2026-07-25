@@ -1,65 +1,23 @@
-const db = require("../models");
+const { SlashCommandBuilder } = require("discord.js");
+const db = require("../../models");
 
 module.exports = {
-  name: "참가",
-  description: "시크릿 산타 & 마니또 참가",
-  execute(message, args) {
-    const user = message.author;
-    // console.log(message.id);
-    // User {
-    //     id: '234086876061892608',
-    //     username: 'rikimaru',
-    //     bot: false,
-    //     discriminator: '7054',
-    //     avatar: '270edc3dadf25f40cbe0b95145638543',
-    //     flags: UserFlags { bitfield: 64 },
-    //     lastMessageID: '908944046582542346',
-    //     lastMessageChannelID: '639853557226668052'
-    // }
-
-    const person = new db.Person({
-      userId: user.id,
-      userName: user.username,
-      userMessage: message.id,
-    });
-
-    var duplicate = [];
-
-    db.Person.find({})
-      .then((res) => {
-        // console.log("before", res);
-        if (res.length >= 1) {
-          for (let i = 0; i < res.length; i++) {
-            duplicate.push(res[i].userName);
-          }
-        }
-        // console.log("result", duplicate);
-        if (duplicate.length == 0) {
-          // console.log("0 일때", duplicate.length)
-          person
-            .save()
-            .then((res) => {
-              console.log(`${res.userName} is saved to DB`); // Undefined
-              message.reply(`${res.userName} 참가 신청해주셔서 감사합니다.`);
-            })
-            .catch((err) => console.log(err));
-        } else if (duplicate.length > 0) {
-          // console.log("0 보다 클때", duplicate.length)
-          if (duplicate.find(e => e == message.author.username)) {
-            message.reply("중복 참가는 불가능 합니다.");
-          } else {
-            person
-            .save()
-            .then((res) => {
-              console.log(`${res.userName} is saved to DB`); // Undefined 
-              message.reply(`${res.userName} 참가 신청해주셔서 감사합니다.`);
-            })
-            .catch((err) => console.log(err));
-          }
-        } else {
-          message.reply("중복 참가는 불가능 합니다.");
-        }
-      })
-      .catch((err) => console.log(err));
+  deprecated: true, // Old seasonal (Secret Santa) command, unused for now — hidden from command loading.
+  data: new SlashCommandBuilder().setName("참가").setDescription("시크릿 산타 & 마니또에 참가합니다."),
+  async execute(interaction) {
+    const { id, username } = interaction.user;
+    try {
+      // Fixed: original checked for duplicates by userName, so two people who share a
+      // display name (or one person rejoining under a new name) could slip through.
+      const existing = await db.Person.findOne({ userId: id });
+      if (existing) {
+        return interaction.reply({ content: "중복 참가는 불가능합니다.", ephemeral: true });
+      }
+      await new db.Person({ userId: id, userName: username, userMessage: interaction.id }).save();
+      return interaction.reply(`${username} 님, 참가 신청해주셔서 감사합니다.`);
+    } catch (err) {
+      console.error(err);
+      return interaction.reply({ content: "참가 신청 중 오류가 발생했습니다.", ephemeral: true });
+    }
   },
 };

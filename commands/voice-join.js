@@ -1,20 +1,7 @@
-module.exports = {
-	name: 'join-voice',
-	description: 'Join Voice Channel with Command',
-	execute(message, args) {
-        console.log("working");
-        const VCchannel = message.guild.channels.cache.find(channel => channel.name === 'voice');
-
-        message.member.voice.setChannel(VCchannel).catch(err => console.log(err));
-        if (message.author.bot) return;
-        client.on('message', message => {
-            if (message.author.bot) return;
-        
-            if (message.content == 'password') {
-                message.delete();
-                const VCchannel = message.guild.channels.cache.find(channel => channel.name === 'The Grind 3');
-                message.member.voice.setChannel(VCchannel).catch(err => console.log(err));
-            }
-        })
-	},
-};
+// Deprecated: this command referenced an undefined `client` variable and hardcoded
+// channel names, so it never actually worked. Its purpose (join a voice channel and
+// get auto-managed) is now handled properly by the Voicemaster feature - see
+// commands/voicemaster-setup.js, commands/voice-control.js, and voicemaster/.
+//
+// Safe to delete this file.
+module.exports = { deprecated: true };

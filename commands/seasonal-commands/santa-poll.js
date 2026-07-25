@@ -1,74 +1,43 @@
-const db = require("../models");
+const { SlashCommandBuilder } = require("discord.js");
+const db = require("../../models");
+
+// Stable poll id (instead of a one-off hardcoded Discord message id) so this poll
+// document can be re-seeded and reused every year without editing the command.
+const DATE_POLL_ID = "santa-date-poll";
 
 module.exports = {
-  name: "날짜투표",
-  description: "마니또 끝나는 날짜 투표",
-  async execute(message, args, client, mongoose) {
-    let userArr = [];
-    const userpick = args[0] - 1;
-    const startmsg = "```현재 투표 결과입니다. \n";
-    var middlemsg = "";
-    const endmsg = "```";
+  deprecated: true, // Old seasonal (Secret Santa) command, unused for now — hidden from command loading.
+  data: new SlashCommandBuilder()
+    .setName("날짜투표")
+    .setDescription("마니또 종료 날짜에 투표합니다.")
+    .addIntegerOption((opt) => opt.setName("번호").setDescription("선택할 날짜 번호").setMinValue(1).setRequired(true)),
+  async execute(interaction) {
+    const choiceNumber = interaction.options.getInteger("번호");
+    const userpick = choiceNumber - 1;
 
-    await db.Person.find({})
-      .then((res) => {
-        // console.log(res);
-        for (let i = 0; i < res.length; i++) {
-          userArr.push(res[i].userId);
-        }
-        // console.log(userArr);
-      })
-      .catch((err) => console.error(err));
-
-    const { id } = message.author;
-    const { username } = message.author;
-
-    if (userArr.includes(id)) {
-      if (!args.length) {
-        message.channel.send(
-          "투표 하실 번호를 입력해주세요. 예시) 날짜투표 <번호>"
-        );
-      } else if (args.length > 1) {
-        message.channel.send(
-          "번호를 제대로 입력 하지 않았습니다. 제대로 입력해주세요. 예시) 날짜투표 <번호>"
-        );
-      } else {
-        db.Poll.findOne({
-          pollId: "921863696232353822", // need pollId
-        })
-          .then((res) => {
-            console.log(res,"res is here");
-            const value = res.choices[userpick];
-            const id = res.choices[userpick].poll;
-            console.log("--------------", value, id);
-            db.Poll.updateOne(
-              // { _id: value._id },
-              { "choices.id": userpick },
-              { $set: { "choices.$.poll": id + 1 } },
-              { new: true }
-            )
-              .then((res) => {
-                console.log('res two is heree', res);
-                db.Poll.findOne({
-                  pollId: "921863696232353822", // need pollId
-                })
-                  .then((res) => {
-                    for (let j = 0; j < res.choices.length; j++) {
-                      middlemsg += `${j + 1}. ${res.choices[j].name} ${
-                        res.choices[j].poll
-                      }\n\n`;
-                    }
-                    const result = startmsg + middlemsg + endmsg;
-                    message.reply(result);
-                  })
-                  .catch((err) => console.error(err));
-              })
-              .catch((err) => console.error(err));
-          })
-          .catch((err) => console.error(err));
+    try {
+      const participant = await db.Person.findOne({ userId: interaction.user.id });
+      if (!participant) {
+        return interaction.reply({ content: "당신은 마니또 그룹에 속해있지 않습니다.", ephemeral: true });
       }
-    } else {
-      message.reply("당신은 마니또 그룹에 속해있지 않습니다.");
+
+      const poll = await db.Poll.findOne({ pollId: DATE_POLL_ID });
+      if (!poll) {
+        return interaction.reply({ content: "날짜 투표가 아직 생성되지 않았습니다.", ephemeral: true });
+      }
+      const choice = poll.choices[userpick];
+      if (!choice) {
+        return interaction.reply({ content: "존재하지 않는 번호입니다.", ephemeral: true });
+      }
+
+      await db.Poll.updateOne({ pollId: DATE_POLL_ID, "choices.id": choice.id }, { $set: { "choices.$.poll": choice.poll + 1 } });
+
+      const updated = await db.Poll.findOne({ pollId: DATE_POLL_ID });
+      const result = updated.choices.map((c, i) => `${i + 1}. ${c.name} ${c.poll}`).join("\n\n");
+      return interaction.reply(`\`\`\`현재 투표 결과입니다. \n${result}\n\`\`\``);
+    } catch (err) {
+      console.error(err);
+      return interaction.reply({ content: "투표하는 중 오류가 발생했습니다.", ephemeral: true });
     }
   },
 };
