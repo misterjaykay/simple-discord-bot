@@ -45,11 +45,14 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
 ## Features
 
 - **Slash commands** for everything - see `/help` in Discord for the full list.
-- **Voicemaster** (join-to-create voice channels): admins run `/보이스마스터-설정 생성`
-  (or `채널지정` to reuse an existing channel) once. After that, anyone who joins the
-  trigger channel gets their own personal voice channel automatically, with a
-  control panel (lock/unlock, rename, user limit, kick, claim) posted right in the
-  channel's chat. The same controls are also available via `/보이스채널`.
+- **Voicemaster** (join-to-create voice channels): admins run `/보이스설정 생성`
+  (or `채널지정` to reuse an existing channel) - repeatable, so a guild can have
+  several independent trigger channels, each with its own name template
+  (`{user}` placeholder) and an optional auto-granted "owner" role. Anyone who
+  joins a trigger channel gets their own personal voice channel automatically,
+  with a control panel (lock/unlock, hide/reveal, rename, user limit, region,
+  bitrate, kick, claim) posted right in the channel's chat, or via `/보이스채널`.
+  `/보이스설정 목록` lists every trigger configured for the server.
 - **Music playback** (`/재생`, `/스톱`) via `@discordjs/voice`.
 - **Birthdays / MBTI / movie polls / secret-santa (마니또)** commands backed by
   MongoDB (`MONGODB_URI` must be set for these to work).

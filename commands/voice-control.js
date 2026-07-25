@@ -1,6 +1,24 @@
 const { SlashCommandBuilder } = require("discord.js");
 const TempVoiceChannel = require("../models/temp-voice-channel");
 
+const REGION_CHOICES = [
+  { name: "자동", value: "automatic" },
+  { name: "대한민국", value: "south-korea" },
+  { name: "일본", value: "japan" },
+  { name: "홍콩", value: "hongkong" },
+  { name: "싱가포르", value: "singapore" },
+  { name: "인도", value: "india" },
+  { name: "시드니", value: "sydney" },
+  { name: "러시아", value: "russia" },
+  { name: "남아프리카", value: "southafrica" },
+  { name: "브라질", value: "brazil" },
+  { name: "유럽(로테르담)", value: "rotterdam" },
+  { name: "미국 서부", value: "us-west" },
+  { name: "미국 동부", value: "us-east" },
+  { name: "미국 중부", value: "us-central" },
+  { name: "미국 남부", value: "us-south" },
+];
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("보이스채널")
@@ -14,8 +32,22 @@ module.exports = {
         .setDescription("채널 인원 제한을 변경합니다.")
         .addIntegerOption((opt) => opt.setName("인원").setDescription("0은 무제한").setMinValue(0).setMaxValue(99).setRequired(true))
     )
-    .addSubcommand((sub) => sub.setName("잠금").setDescription("채널을 잠급니다."))
+    .addSubcommand((sub) => sub.setName("잠금").setDescription("채널을 잠급니다. (입장 차단, 채널은 계속 보임)"))
     .addSubcommand((sub) => sub.setName("잠금해제").setDescription("채널 잠금을 해제합니다."))
+    .addSubcommand((sub) => sub.setName("숨기기").setDescription("채널을 목록에서 아예 보이지 않게 숨깁니다."))
+    .addSubcommand((sub) => sub.setName("보이기").setDescription("숨긴 채널을 다시 목록에 보이게 합니다."))
+    .addSubcommand((sub) =>
+      sub
+        .setName("지역")
+        .setDescription("채널의 음성 서버 지역을 변경합니다.")
+        .addStringOption((opt) => opt.setName("지역").setDescription("변경할 지역").setRequired(true).addChoices(...REGION_CHOICES))
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("비트레이트")
+        .setDescription("채널의 음질(비트레이트)을 변경합니다. 서버 부스트 등급에 따라 최대치가 다릅니다.")
+        .addIntegerOption((opt) => opt.setName("kbps").setDescription("8~384 사이 (서버 부스트 등급 이상은 적용 안 됨)").setMinValue(8).setMaxValue(384).setRequired(true))
+    )
     .addSubcommand((sub) => sub.setName("소유권가져오기").setDescription("방장이 자리를 비운 채널의 소유권을 가져옵니다.")),
 
   async execute(interaction) {
@@ -35,8 +67,11 @@ module.exports = {
       if (voiceChannel.members.has(tracked.ownerId)) {
         return interaction.reply({ content: "현재 방장이 채널에 있어서 소유권을 가져올 수 없습니다.", ephemeral: true });
       }
+      const { grantOwnerRole, revokeOwnerRole } = require("../voicemaster/voiceStateHandler");
+      await revokeOwnerRole(interaction.guild, tracked.ownerId, tracked.ownerRoleId);
       tracked.ownerId = interaction.user.id;
       await tracked.save();
+      await grantOwnerRole(interaction.guild, interaction.user.id, tracked.ownerRoleId);
       return interaction.reply(`<@${interaction.user.id}> 님이 새로운 방장이 되었습니다. 👑`);
     }
 
@@ -60,6 +95,29 @@ module.exports = {
       const everyone = interaction.guild.roles.everyone;
       await voiceChannel.permissionOverwrites.edit(everyone, { Connect: sub === "잠금해제" ? null : false });
       return interaction.reply({ content: sub === "잠금" ? "채널을 잠갔습니다. 🔒" : "채널을 열었습니다. 🔓", ephemeral: true });
+    }
+
+    if (sub === "숨기기" || sub === "보이기") {
+      const everyone = interaction.guild.roles.everyone;
+      await voiceChannel.permissionOverwrites.edit(everyone, { ViewChannel: sub === "보이기" ? null : false });
+      return interaction.reply({ content: sub === "숨기기" ? "채널을 숨겼습니다. 🙈" : "채널을 다시 보이게 했습니다. 👀", ephemeral: true });
+    }
+
+    if (sub === "지역") {
+      const region = interaction.options.getString("지역");
+      await voiceChannel.setRTCRegion(region === "automatic" ? null : region);
+      return interaction.reply({ content: `음성 지역을 ${region === "automatic" ? "자동" : region}(으)로 변경했습니다.`, ephemeral: true });
+    }
+
+    if (sub === "비트레이트") {
+      const kbps = interaction.options.getInteger("kbps");
+      try {
+        await voiceChannel.setBitrate(kbps * 1000);
+        return interaction.reply({ content: `비트레이트를 ${kbps}kbps로 변경했습니다.`, ephemeral: true });
+      } catch (err) {
+        console.error(err);
+        return interaction.reply({ content: "비트레이트를 변경하지 못했습니다. 서버 부스트 등급이 부족할 수 있어요.", ephemeral: true });
+      }
     }
   },
 };

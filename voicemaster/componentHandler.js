@@ -1,5 +1,6 @@
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, PermissionFlagsBits } = require("discord.js");
 const TempVoiceChannel = require("../models/temp-voice-channel");
+const { grantOwnerRole, revokeOwnerRole } = require("./voiceStateHandler");
 
 async function getTrackedChannel(interaction) {
   const tracked = await TempVoiceChannel.findOne({ channelId: interaction.channel.id });
@@ -42,8 +43,11 @@ async function handleVoicemasterComponent(interaction) {
       return interaction.reply({ content: "현재 방장이 채널에 있어서 소유권을 가져올 수 없습니다.", ephemeral: true });
     }
 
+    await revokeOwnerRole(interaction.guild, tracked.ownerId, tracked.ownerRoleId);
     tracked.ownerId = interaction.user.id;
     await tracked.save();
+    await grantOwnerRole(interaction.guild, interaction.user.id, tracked.ownerRoleId);
+
     return interaction.reply(`<@${interaction.user.id}> 님이 새로운 방장이 되었습니다. 👑`);
   }
 
