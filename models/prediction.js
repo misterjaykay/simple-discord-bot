@@ -28,6 +28,9 @@ const predictionSchema = new Schema({
   winningOptionIndex: { type: Number },
   createdBy: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
+  // Optional auto-lock deadline. When set, the prediction locks itself (same as
+  // /예측 마감) once this time passes, even with nobody around to run the command.
+  lockAt: { type: Date },
 });
 
 module.exports = mongoose.model("Prediction", predictionSchema);

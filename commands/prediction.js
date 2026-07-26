@@ -2,6 +2,7 @@ const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const Prediction = require("../models/prediction");
 const { addPoints } = require("../points/pointsService");
 const { buildPredictionMessage, refreshPredictionMessage } = require("../prediction/predictionView");
+const { lockPrediction, scheduleAutoLock, clearScheduledLock } = require("../prediction/predictionService");
 
 function isAdmin(interaction) {
   return interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) ?? false;
@@ -26,6 +27,14 @@ module.exports = {
         .addStringOption((opt) => opt.setName("옵션2").setDescription("예: 패배").setRequired(true))
         .addStringOption((opt) => opt.setName("옵션3").setDescription("세 번째 옵션 (선택)").setRequired(false))
         .addStringOption((opt) => opt.setName("옵션4").setDescription("네 번째 옵션 (선택)").setRequired(false))
+        .addIntegerOption((opt) =>
+          opt
+            .setName("시간")
+            .setDescription("몇 분 후 자동으로 마감할지 (비워두면 /예측 마감 으로 직접 마감)")
+            .setMinValue(1)
+            .setMaxValue(10080)
+            .setRequired(false)
+        )
     )
     .addSubcommand((sub) => sub.setName("마감").setDescription("베팅을 마감합니다. (관리자 전용)"))
     .addSubcommand((sub) =>
@@ -67,6 +76,8 @@ module.exports = {
 
       const question = interaction.options.getString("질문");
       const options = ["옵션1", "옵션2", "옵션3", "옵션4"].map((key) => interaction.options.getString(key)).filter(Boolean);
+      const minutes = interaction.options.getInteger("시간");
+      const lockAt = minutes ? new Date(Date.now() + minutes * 60 * 1000) : undefined;
 
       const prediction = await Prediction.create({
         guildId,
@@ -74,12 +85,17 @@ module.exports = {
         question,
         options,
         createdBy: interaction.user.id,
+        lockAt,
       });
 
       await interaction.reply(buildPredictionMessage(prediction));
       const message = await interaction.fetchReply();
       prediction.messageId = message.id;
       await prediction.save();
+
+      if (lockAt) {
+        scheduleAutoLock(interaction.client, prediction);
+      }
       return;
     }
 
@@ -92,14 +108,14 @@ module.exports = {
       if (active.status !== "OPEN") {
         return interaction.reply({ content: "이미 마감된 예측입니다.", ephemeral: true });
       }
-      active.status = "LOCKED";
-      await active.save();
+      clearScheduledLock(active._id);
+      await lockPrediction(interaction.client, active._id, { announce: false });
       await interaction.reply("베팅을 마감했습니다. 더 이상 베팅을 받지 않습니다.");
-      await refreshPredictionMessage(interaction.client, active);
       return;
     }
 
     if (sub === "취소") {
+      clearScheduledLock(active._id);
       await refundAllBets(guildId, active);
       active.status = "CANCELLED";
       await active.save();

@@ -8,6 +8,7 @@ const { Client, Collection, Events, GatewayIntentBits, ActivityType } = require(
 const { handleVoiceStateUpdate } = require("./voicemaster/voiceStateHandler");
 const { handleVoicemasterComponent } = require("./voicemaster/componentHandler");
 const { handlePredictionComponent } = require("./prediction/componentHandler");
+const { rearmScheduledLocks } = require("./prediction/predictionService");
 
 // Create a new client instance
 const client = new Client({
@@ -73,6 +74,12 @@ client.once(Events.ClientReady, (c) => {
     activities: [{ name: "명령어는 /help", type: ActivityType.Playing }],
     status: "online",
   });
+
+  // Re-arm any /예측 생성 ... 시간: auto-lock timers that were pending when the
+  // process last stopped (e.g. Railway redeploy/restart) - without this a
+  // restart would silently lose the deadline and the prediction would never
+  // auto-lock.
+  rearmScheduledLocks(c).catch((err) => console.error("[prediction] rearm failed:", err));
 });
 
 // Voicemaster join-to-create system: creates/cleans up personal temp voice channels.

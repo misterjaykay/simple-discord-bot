@@ -58,10 +58,17 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
   points automatically (first time they check `/포인트` or place a bet), and
   admins can hand out more anytime with `/포인트관리 지급` or `/포인트관리 전체지급`.
   Admins run `/예측 생성`, which posts a message with a button per outcome;
-  clicking one opens a modal to enter a bet amount. `/예측 마감` stops new bets,
-  `/예측 종료 승리옵션:` settles it - winners split the losing side's pot
-  proportionally to their stake (same math as Twitch Predictions), and
-  `/예측 취소` refunds everyone if needed.
+  clicking one opens a modal to enter a bet amount. Odds are pari-mutuel (real
+  sports-book style, not a flat 2x): the payout multiplier for each option is
+  shown live on the message and in the bet modal as `totalPot / optionPot`, so
+  it drops as a side gets more action and rises on the side fewer people back.
+  `/예측 생성`'s optional `시간` option (minutes) auto-locks the prediction once
+  the deadline passes - same effect as running `/예측 마감` manually, and the
+  countdown shows live on the message via Discord's auto-updating timestamp.
+  Auto-lock timers survive bot restarts (re-armed from the DB on startup).
+  `/예측 마감` stops new bets, `/예측 종료 승리옵션:` settles it - winners split
+  the losing side's pot proportionally to their stake, and `/예측 취소` refunds
+  everyone if needed.
 - **Birthdays / MBTI / movie polls / secret-santa (마니또)** commands backed by
   MongoDB (`MONGODB_URI` must be set for these to work).
 

@@ -1,7 +1,7 @@
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require("discord.js");
 const Prediction = require("../models/prediction");
 const { getOrCreatePoints } = require("../points/pointsService");
-const { refreshPredictionMessage } = require("./predictionView");
+const { refreshPredictionMessage, computeOdds } = require("./predictionView");
 
 async function handlePredictionComponent(interaction) {
   const { customId } = interaction;
@@ -14,7 +14,15 @@ async function handlePredictionComponent(interaction) {
       return interaction.reply({ content: "이 예측은 더 이상 베팅을 받지 않습니다.", ephemeral: true });
     }
 
-    const modal = new ModalBuilder().setCustomId(`pred:bet_modal:${optionIndex}`).setTitle(`"${prediction.options[optionIndex]}"에 베팅`);
+    // Show the live odds right in the modal title - it's computed fresh on every
+    // click, so it reflects whatever the pot looks like at that exact moment.
+    const odds = computeOdds(prediction, optionIndex);
+    const oddsSuffix = odds ? ` (현재 배당 ${odds.toFixed(2)}x)` : " (첫 베팅! 1x)";
+    const label = prediction.options[optionIndex];
+    let title = `"${label}"에 베팅${oddsSuffix}`;
+    if (title.length > 45) title = title.slice(0, 44) + "…";
+
+    const modal = new ModalBuilder().setCustomId(`pred:bet_modal:${optionIndex}`).setTitle(title);
     const amountInput = new TextInputBuilder()
       .setCustomId("amount")
       .setLabel("베팅할 포인트")
