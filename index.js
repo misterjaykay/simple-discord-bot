@@ -54,7 +54,22 @@ if (process.env.MONGODB_URI) {
   const maskedUri = process.env.MONGODB_URI.replace(/\/\/([^:]+):([^@]+)@/, "//$1:****@");
   console.log(`[mongo] MONGODB_URI is set, attempting connection to: ${maskedUri}`);
 
-  mongoose.connection.on("connected", () => console.log("[mongo] connected"));
+  mongoose.connection.on("connected", () => {
+    console.log("[mongo] connected");
+
+    // Drop/rebuild indexes to match the current schemas. Needed because Mongoose's
+    // default autoIndex only ADDS indexes declared in a schema - it never removes
+    // ones left over from an older schema version. voicemasterconfigs used to have
+    // a unique index on guildId (one trigger channel per guild); the schema was
+    // changed to allow multiple triggers per guild (unique on triggerChannelId
+    // instead), but the stale guildId unique index stayed in the actual DB and kept
+    // rejecting inserts with E11000 duplicate key errors. syncIndexes() reconciles
+    // every model's indexes with its schema on every boot, so this class of drift
+    // can't happen again as the schemas evolve.
+    for (const model of Object.values(require("./models"))) {
+      model.syncIndexes().catch((err) => console.error(`[mongo] syncIndexes failed for ${model.modelName}:`, err.message));
+    }
+  });
   mongoose.connection.on("error", (err) => console.error("[mongo] connection error:", err.message));
   mongoose.connection.on("disconnected", () => console.warn("[mongo] disconnected"));
 
