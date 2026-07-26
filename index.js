@@ -48,10 +48,20 @@ function loadCommands(dir) {
 loadCommands(path.join(__dirname, "commands"));
 
 if (process.env.MONGODB_URI) {
-  mongoose
-    .connect(process.env.MONGODB_URI)
-    .then(() => console.log("Connected to DB"))
-    .catch((err) => console.error("DB connection error:", err));
+  // Masked so it's safe to paste into logs/chat - shows scheme/host, hides the password.
+  const maskedUri = process.env.MONGODB_URI.replace(/\/\/([^:]+):([^@]+)@/, "//$1:****@");
+  console.log(`[mongo] MONGODB_URI is set, attempting connection to: ${maskedUri}`);
+
+  mongoose.connection.on("connected", () => console.log("[mongo] connected"));
+  mongoose.connection.on("error", (err) => console.error("[mongo] connection error:", err.message));
+  mongoose.connection.on("disconnected", () => console.warn("[mongo] disconnected"));
+
+  // A short serverSelectionTimeoutMS surfaces the real failure reason (bad auth, IP not
+  // allowlisted, DNS failure, etc.) quickly instead of only seeing generic "buffering
+  // timed out" errors from queries that ran while still waiting to connect.
+  mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 }).catch((err) => {
+    console.error("[mongo] initial connect failed:", err.message);
+  });
 } else {
   console.warn("[WARNING] MONGODB_URI is not set - birthday/mbti/poll/santa/voicemaster commands need it to work.");
 }
