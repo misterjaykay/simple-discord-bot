@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const { SlashCommandBuilder, PermissionFlagsBits, ChannelType } = require("discord.js");
 const Prediction = require("../models/prediction");
 const { addPoints } = require("../points/pointsService");
 const { buildPredictionMessage, refreshPredictionMessage } = require("../prediction/predictionView");
@@ -33,6 +33,13 @@ module.exports = {
             .setDescription("몇 분 후 자동으로 마감할지 (비워두면 /예측 마감 으로 직접 마감)")
             .setMinValue(1)
             .setMaxValue(10080)
+            .setRequired(false)
+        )
+        .addChannelOption((opt) =>
+          opt
+            .setName("채널")
+            .setDescription("예측을 올릴 채널 (비워두면 이 명령어를 입력한 채널)")
+            .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
             .setRequired(false)
         )
     )
@@ -78,23 +85,37 @@ module.exports = {
       const options = ["옵션1", "옵션2", "옵션3", "옵션4"].map((key) => interaction.options.getString(key)).filter(Boolean);
       const minutes = interaction.options.getInteger("시간");
       const lockAt = minutes ? new Date(Date.now() + minutes * 60 * 1000) : undefined;
+      const targetChannel = interaction.options.getChannel("채널") ?? interaction.channel;
+
+      const botPermissions = targetChannel.permissionsFor(interaction.guild.members.me);
+      if (!botPermissions?.has(PermissionFlagsBits.SendMessages) || !botPermissions?.has(PermissionFlagsBits.ViewChannel)) {
+        return interaction.reply({
+          content: `<#${targetChannel.id}> 채널에 메시지를 보낼 권한이 없어요. 봇 권한을 확인해주세요.`,
+          ephemeral: true,
+        });
+      }
 
       const prediction = await Prediction.create({
         guildId,
-        channelId: interaction.channel.id,
+        channelId: targetChannel.id,
         question,
         options,
         createdBy: interaction.user.id,
         lockAt,
       });
 
-      await interaction.reply(buildPredictionMessage(prediction));
-      const message = await interaction.fetchReply();
+      const message = await targetChannel.send(buildPredictionMessage(prediction));
       prediction.messageId = message.id;
       await prediction.save();
 
       if (lockAt) {
         scheduleAutoLock(interaction.client, prediction);
+      }
+
+      if (targetChannel.id === interaction.channel.id) {
+        await interaction.reply({ content: "예측을 생성했습니다.", ephemeral: true });
+      } else {
+        await interaction.reply({ content: `<#${targetChannel.id}> 채널에 예측을 올렸습니다.`, ephemeral: true });
       }
       return;
     }
