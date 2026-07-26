@@ -54,6 +54,14 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
   bitrate, kick, claim) posted right in the channel's chat, or via `/보이스채널`.
   `/보이스설정 목록` lists every trigger configured for the server.
 - **Music playback** (`/재생`, `/스톱`) via `@discordjs/voice`.
+- **Points + predictions** (Twitch-style betting): everyone starts with 1000
+  points automatically (first time they check `/포인트` or place a bet), and
+  admins can hand out more anytime with `/포인트관리 지급` or `/포인트관리 전체지급`.
+  Admins run `/예측 생성`, which posts a message with a button per outcome;
+  clicking one opens a modal to enter a bet amount. `/예측 마감` stops new bets,
+  `/예측 종료 승리옵션:` settles it - winners split the losing side's pot
+  proportionally to their stake (same math as Twitch Predictions), and
+  `/예측 취소` refunds everyone if needed.
 - **Birthdays / MBTI / movie polls / secret-santa (마니또)** commands backed by
   MongoDB (`MONGODB_URI` must be set for these to work).
 

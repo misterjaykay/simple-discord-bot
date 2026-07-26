@@ -7,6 +7,7 @@ const { Client, Collection, Events, GatewayIntentBits, ActivityType } = require(
 
 const { handleVoiceStateUpdate } = require("./voicemaster/voiceStateHandler");
 const { handleVoicemasterComponent } = require("./voicemaster/componentHandler");
+const { handlePredictionComponent } = require("./prediction/componentHandler");
 
 // Create a new client instance
 const client = new Client({
@@ -91,12 +92,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    // Voicemaster control-panel buttons / select menus / modal submissions
-    if (
-      (interaction.isButton() || interaction.isUserSelectMenu() || interaction.isModalSubmit()) &&
-      interaction.customId?.startsWith("vm:")
-    ) {
-      await handleVoicemasterComponent(interaction);
+    if (interaction.isButton() || interaction.isUserSelectMenu() || interaction.isModalSubmit()) {
+      // Voicemaster control-panel buttons / select menus / modal submissions
+      if (interaction.customId?.startsWith("vm:")) {
+        await handleVoicemasterComponent(interaction);
+      } else if (interaction.customId?.startsWith("pred:")) {
+        // /예측 bet buttons + bet-amount modal submissions
+        await handlePredictionComponent(interaction);
+      }
     }
   } catch (error) {
     console.error(error);

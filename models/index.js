@@ -4,4 +4,6 @@ module.exports = {
   Birthday: require("./birthday"),
   VoiceMasterConfig: require("./voicemaster-config"),
   TempVoiceChannel: require("./temp-voice-channel"),
+  UserPoints: require("./user-points"),
+  Prediction: require("./prediction"),
 };
