@@ -24,4 +24,9 @@ async function addPoints(guildId, user, amount) {
   return record;
 }
 
-module.exports = { getOrCreatePoints, addPoints };
+// Top N balances in a guild, highest first. Used by /포인트순위.
+async function getLeaderboard(guildId, limit = 10) {
+  return UserPoints.find({ guildId }).sort({ points: -1 }).limit(limit);
+}
+
+module.exports = { getOrCreatePoints, addPoints, getLeaderboard };

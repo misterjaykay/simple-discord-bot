@@ -17,8 +17,9 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName("전체지급")
-        .setDescription("서버의 모든 멤버에게 포인트를 지급합니다.")
+        .setDescription("서버의 모든 멤버(또는 특정 역할)에게 포인트를 지급합니다.")
         .addIntegerOption((opt) => opt.setName("포인트").setDescription("지급할 포인트 (기본값 1000)").setMinValue(1).setRequired(false))
+        .addRoleOption((opt) => opt.setName("역할").setDescription("이 역할을 가진 멤버에게만 지급 (비워두면 전체 멤버)").setRequired(false))
     ),
 
   async execute(interaction) {
@@ -35,18 +36,24 @@ module.exports = {
 
     if (sub === "전체지급") {
       const amount = interaction.options.getInteger("포인트") ?? UserPoints.DEFAULT_STARTING_POINTS;
+      const role = interaction.options.getRole("역할");
       await interaction.deferReply();
 
       const members = await interaction.guild.members.fetch();
-      const humans = members.filter((m) => !m.user.bot);
+      const targets = members.filter((m) => !m.user.bot && (!role || m.roles.cache.has(role.id)));
+
+      if (targets.size === 0) {
+        return interaction.editReply(role ? `<@&${role.id}> 역할을 가진 멤버가 없어요.` : "지급할 멤버가 없어요.");
+      }
 
       let count = 0;
-      for (const member of humans.values()) {
+      for (const member of targets.values()) {
         await addPoints(interaction.guild.id, member.user, amount);
         count += 1;
       }
 
-      return interaction.editReply(`${count}명의 멤버에게 ${amount.toLocaleString()} 포인트씩 지급했습니다.`);
+      const who = role ? `<@&${role.id}> 역할을 가진 ${count}명` : `${count}명의 멤버`;
+      return interaction.editReply(`${who}에게 ${amount.toLocaleString()} 포인트씩 지급했습니다.`);
     }
   },
 };

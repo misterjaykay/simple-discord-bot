@@ -29,6 +29,17 @@ Whenever you add/change a command, push the updated command list to Discord:
 ```
 npm run deploy-commands
 ```
+This registers globally if `GUILD_ID` is unset (all servers, up to ~1hr to
+propagate) or to that one guild if `GUILD_ID` is set (instant, for testing).
+
+**If commands show up twice in Discord**, it's because they were deployed both
+ways at some point (a guild-specific set AND a global set both exist for the
+same names). Set `GUILD_ID` in `.env` to the affected server's ID and run:
+```
+npm run clear-guild-commands
+```
+This wipes only that guild's command set, leaving the global one as the only
+copy.
 
 ### Run
 ```
@@ -56,12 +67,16 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
 - **Music playback** (`/재생`, `/스톱`) via `@discordjs/voice`.
 - **Points + predictions** (Twitch-style betting): everyone starts with 1000
   points automatically (first time they check `/포인트` or place a bet), and
-  admins can hand out more anytime with `/포인트관리 지급` or `/포인트관리 전체지급`.
+  admins can hand out more anytime with `/포인트관리 지급` or `/포인트관리 전체지급`
+  (`전체지급` optionally targets a single role via its `역할` option instead of
+  every member). `/포인트순위` shows the top 10 balances in the server.
   Admins run `/예측 생성`, which posts a message with a button per outcome;
   clicking one opens a modal to enter a bet amount. Odds are pari-mutuel (real
   sports-book style, not a flat 2x): the payout multiplier for each option is
   shown live on the message and in the bet modal as `totalPot / optionPot`, so
   it drops as a side gets more action and rises on the side fewer people back.
+  Each option lists who bet how much, live, right in the channel while betting
+  is still open - not just the aggregate pot.
   `/예측 생성`'s optional `시간` option (minutes) auto-locks the prediction once
   the deadline passes - same effect as running `/예측 마감` manually, and the
   countdown shows live on the message via Discord's auto-updating timestamp.
