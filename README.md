@@ -69,9 +69,12 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
   points automatically (first time they check `/포인트` or place a bet), and
   admins can hand out more anytime with `/포인트관리 지급` or `/포인트관리 전체지급`
   (`전체지급` optionally targets a single role via its `역할` option instead of
-  every member), or fix a drifted balance with `/포인트관리 설정` which sets an
-  exact value instead of adding to whatever's already there (also supports the
-  `역할` filter). `/포인트순위` shows the top 10 balances in the server.
+  every member, and `제외` flips that to "everyone except this role"), or fix a
+  drifted balance with `/포인트관리 설정` which sets an exact value instead of
+  adding to whatever's already there (same `역할`/`제외` filters - handy for
+  correcting a mistaken grant to ineligible members without touching balances
+  eligible members already earned from betting). `/포인트순위` shows the top 10
+  balances in the server.
   Admins run `/예측 생성`, which posts a message with a button per outcome;
   clicking one opens a modal to enter a bet amount. Odds are pari-mutuel (real
   sports-book style, not a flat 2x): the payout multiplier for each option is
