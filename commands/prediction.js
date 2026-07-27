@@ -4,8 +4,13 @@ const { addPoints } = require("../points/pointsService");
 const { buildPredictionMessage, refreshPredictionMessage } = require("../prediction/predictionView");
 const { lockPrediction, scheduleAutoLock, clearScheduledLock } = require("../prediction/predictionService");
 
+// Test-run lockdown: require actual Administrator (owner or an Administrator
+// role), not just "Manage Server" - so nobody can spam-create/lock/settle
+// predictions while this is still being tried out. Once there's a dedicated
+// admin role and per-command permissions are set up in Discord's own
+// Integrations settings, this can be relaxed back to ManageGuild if wanted.
 function isAdmin(interaction) {
-  return interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) ?? false;
+  return interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ?? false;
 }
 
 async function refundAllBets(guildId, prediction) {

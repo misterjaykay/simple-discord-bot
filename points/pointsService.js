@@ -24,9 +24,21 @@ async function addPoints(guildId, user, amount) {
   return record;
 }
 
+// Sets the balance to an exact value rather than adding to whatever it already
+// is. Used for admin corrections (e.g. "everyone got an extra grant by mistake,
+// reset the whole server to a known baseline") where addPoints' relative math
+// would require knowing each person's current, possibly-drifted balance.
+async function setPoints(guildId, user, amount) {
+  const record = await getOrCreatePoints(guildId, user);
+  record.points = amount;
+  record.username = user.username ?? record.username;
+  await record.save();
+  return record;
+}
+
 // Top N balances in a guild, highest first. Used by /포인트순위.
 async function getLeaderboard(guildId, limit = 10) {
   return UserPoints.find({ guildId }).sort({ points: -1 }).limit(limit);
 }
 
-module.exports = { getOrCreatePoints, addPoints, getLeaderboard };
+module.exports = { getOrCreatePoints, addPoints, setPoints, getLeaderboard };
