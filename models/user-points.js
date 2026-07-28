@@ -22,6 +22,16 @@ const userPointsSchema = new Schema({
     type: Number,
     default: DEFAULT_STARTING_POINTS,
   },
+  // Tracks today's chat-earned total so it can be capped (voice income is left
+  // uncapped by design - only chat needs a ceiling since it's the one that can
+  // be spammed). Resets whenever chatPointsDate no longer matches "today".
+  chatPointsToday: {
+    type: Number,
+    default: 0,
+  },
+  chatPointsDate: {
+    type: String, // "YYYY-MM-DD" in server-local time
+  },
 });
 
 userPointsSchema.index({ guildId: 1, userId: 1 }, { unique: true });

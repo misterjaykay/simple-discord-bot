@@ -41,4 +41,8 @@ async function getLeaderboard(guildId, limit = 10) {
   return UserPoints.find({ guildId }).sort({ points: -1 }).limit(limit);
 }
 
-module.exports = { getOrCreatePoints, addPoints, setPoints, getLeaderboard };
+function todayString() {
+  return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+}
+
+module.exports = { getOrCreatePoints, addPoints, setPoints, getLeaderboard, todayString };

@@ -66,7 +66,13 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
   `/보이스설정 목록` lists every trigger configured for the server.
 - **Music playback** (`/재생`, `/스톱`) via `@discordjs/voice`.
 - **Points + predictions** (Twitch-style betting): everyone starts with 1000
-  points automatically (first time they check `/포인트` or place a bet), and
+  points automatically (first time they check `/포인트` or place a bet).
+  Ongoing points come from two sources: being in a voice channel (10 points
+  every 5 minutes, requires at least one other real person in the same channel
+  and excludes the server's AFK channel - no daily cap, since actual voice time
+  is naturally rate-limited) and chatting (5 points per message, 10s cooldown
+  per person, capped at 150/day) - the cooldown + daily cap keep chat from being
+  spammed just to farm bet money. Additionally,
   admins can hand out more anytime with `/포인트관리 지급` or `/포인트관리 전체지급`
   (`전체지급` optionally targets a single role via its `역할` option instead of
   every member, and `제외` flips that to "everyone except this role"), or fix a

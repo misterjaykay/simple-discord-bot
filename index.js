@@ -9,6 +9,8 @@ const { handleVoiceStateUpdate } = require("./voicemaster/voiceStateHandler");
 const { handleVoicemasterComponent } = require("./voicemaster/componentHandler");
 const { handlePredictionComponent } = require("./prediction/componentHandler");
 const { rearmScheduledLocks } = require("./prediction/predictionService");
+const { startVoicePointsInterval } = require("./points/voicePointsService");
+const { awardChatPoints } = require("./points/chatPointsService");
 
 // Create a new client instance
 const client = new Client({
@@ -95,11 +97,22 @@ client.once(Events.ClientReady, (c) => {
   // restart would silently lose the deadline and the prediction would never
   // auto-lock.
   rearmScheduledLocks(c).catch((err) => console.error("[prediction] rearm failed:", err));
+
+  if (process.env.MONGODB_URI) {
+    startVoicePointsInterval(c);
+  }
 });
 
 // Voicemaster join-to-create system: creates/cleans up personal temp voice channels.
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   handleVoiceStateUpdate(oldState, newState).catch((err) => console.error("voiceStateUpdate handler error:", err));
+});
+
+// Chat is also allowed to earn points (capped + cooldown-limited, see
+// chatPointsService.js) so people aren't only rewarded for sitting in voice.
+client.on(Events.MessageCreate, (message) => {
+  if (!message.guild || message.author.bot || !process.env.MONGODB_URI) return;
+  awardChatPoints(message.guild.id, message.author).catch((err) => console.error("[points] chat award failed:", err.message));
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
