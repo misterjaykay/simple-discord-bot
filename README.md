@@ -72,7 +72,11 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
   and excludes the server's AFK channel - no daily cap, since actual voice time
   is naturally rate-limited) and chatting (5 points per message, 10s cooldown
   per person, capped at 150/day) - the cooldown + daily cap keep chat from being
-  spammed just to farm bet money. Additionally,
+  spammed just to farm bet money. Admins can temporarily change the voice rate
+  with `/포인트관리 보이스이벤트 포인트:20` (e.g. a "Happy Friday" boost) - add
+  `시간:` (minutes) to auto-revert to the default, or run
+  `/포인트관리 보이스이벤트 복구:true` to revert manually at any time; it survives
+  bot restarts. Additionally,
   admins can hand out more anytime with `/포인트관리 지급` or `/포인트관리 전체지급`
   (`전체지급` optionally targets a single role via its `역할` option instead of
   every member, and `제외` flips that to "everyone except this role"), or fix a

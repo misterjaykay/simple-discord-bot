@@ -5,7 +5,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("보이스설정")
     .setDescription("입장하면 개인 음성 채널이 자동 생성되는 시스템을 설정합니다. (관리자 전용)")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand((sub) =>
       sub
         .setName("생성")

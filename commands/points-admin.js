@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const UserPoints = require("../models/user-points");
 const { addPoints, setPoints } = require("../points/pointsService");
+const { setVoiceEventRate, clearVoiceEventRate, DEFAULT_POINTS_PER_INTERVAL } = require("../points/voicePointsService");
 
 // Shared by 전체지급/설정: pick the guild members an operation should apply to.
 // With no role given, that's everyone (minus bots). With a role given, it's
@@ -22,7 +23,12 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("포인트관리")
     .setDescription("포인트를 지급/차감합니다. (관리자 전용)")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    // Administrator (not just ManageGuild): Discord actually hides a command
+    // from the slash command picker entirely for members who lack this
+    // permission (unless a server admin overrides it per-role in
+    // Server Settings > Integrations) - it's not just a "blocked at runtime"
+    // check, so this is what makes /포인트관리 invisible to non-admins.
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand((sub) =>
       sub
         .setName("지급")
@@ -48,6 +54,28 @@ module.exports = {
         .addRoleOption((opt) => opt.setName("역할").setDescription("이 역할을 가진 멤버만 (비워두면 전체 멤버)").setRequired(false))
         .addBooleanOption((opt) =>
           opt.setName("제외").setDescription("반대로 이 역할이 없는 멤버만 대상으로 (역할 옵션과 함께 사용)").setRequired(false)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("보이스이벤트")
+        .setDescription("보이스채널 5분당 지급 포인트를 임시로 바꿉니다 (금요일 이벤트 등).")
+        .addIntegerOption((opt) =>
+          opt
+            .setName("포인트")
+            .setDescription(`5분마다 지급할 포인트 (생략하면 기본값 ${DEFAULT_POINTS_PER_INTERVAL}로 복구)`)
+            .setMinValue(0)
+            .setRequired(false)
+        )
+        .addIntegerOption((opt) =>
+          opt
+            .setName("시간")
+            .setDescription("몇 분 후 자동으로 기본값 복구할지 (생략하면 수동으로 복구 전까지 유지)")
+            .setMinValue(1)
+            .setRequired(false)
+        )
+        .addBooleanOption((opt) =>
+          opt.setName("복구").setDescription("true로 설정하면 포인트/시간 무시하고 즉시 기본값으로 복구").setRequired(false)
         )
     ),
 
@@ -107,6 +135,30 @@ module.exports = {
 
       const who = role ? `<@&${role.id}> 역할이 ${exclude ? "없는" : "있는"} ${count}명` : `${count}명의 멤버`;
       return interaction.editReply(`${who}의 포인트를 ${amount.toLocaleString()}(으)로 맞췄습니다.`);
+    }
+
+    if (sub === "보이스이벤트") {
+      const revert = interaction.options.getBoolean("복구") ?? false;
+      const points = interaction.options.getInteger("포인트");
+      const minutes = interaction.options.getInteger("시간");
+
+      if (revert) {
+        await clearVoiceEventRate(interaction.guild.id);
+        return interaction.reply(`보이스채널 지급 포인트를 기본값(5분당 ${DEFAULT_POINTS_PER_INTERVAL}포인트)으로 되돌렸습니다.`);
+      }
+
+      if (points == null) {
+        return interaction.reply({
+          content: "`포인트` 값을 입력하거나, 기본값으로 되돌리려면 `복구:true`로 실행해주세요.",
+          ephemeral: true,
+        });
+      }
+
+      await setVoiceEventRate(interaction.guild.id, points, minutes);
+      const durationText = minutes
+        ? `${minutes}분 후 자동으로 기본값으로 복구됩니다.`
+        : "`/포인트관리 보이스이벤트 복구:true`로 되돌리기 전까지 계속 유지됩니다.";
+      return interaction.reply(`보이스채널 지급 포인트를 5분당 ${points.toLocaleString()}포인트로 변경했습니다. ${durationText}`);
     }
   },
 };

@@ -6,4 +6,5 @@ module.exports = {
   TempVoiceChannel: require("./temp-voice-channel"),
   UserPoints: require("./user-points"),
   Prediction: require("./prediction"),
+  GuildPointsConfig: require("./guild-points-config"),
 };

@@ -9,7 +9,7 @@ const { handleVoiceStateUpdate } = require("./voicemaster/voiceStateHandler");
 const { handleVoicemasterComponent } = require("./voicemaster/componentHandler");
 const { handlePredictionComponent } = require("./prediction/componentHandler");
 const { rearmScheduledLocks } = require("./prediction/predictionService");
-const { startVoicePointsInterval } = require("./points/voicePointsService");
+const { startVoicePointsInterval, rearmVoiceEventReverts } = require("./points/voicePointsService");
 const { awardChatPoints } = require("./points/chatPointsService");
 
 // Create a new client instance
@@ -100,6 +100,7 @@ client.once(Events.ClientReady, (c) => {
 
   if (process.env.MONGODB_URI) {
     startVoicePointsInterval(c);
+    rearmVoiceEventReverts().catch((err) => console.error("[points] rearm voice events failed:", err));
   }
 });
 
