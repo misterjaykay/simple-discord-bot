@@ -103,6 +103,54 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
   `/예측 마감` stops new bets, `/예측 종료 승리옵션:` settles it - winners split
   the losing side's pot proportionally to their stake, and `/예측 취소` refunds
   everyone if needed.
+- **Lottery** (`/복권`, `commands/lottery.js`): one parent command with a
+  `긁기` subcommand and a `추첨` subcommand group, so both games live under a
+  single `/복권` entry in Discord's command picker.
+  - `/복권 긁기` (instant scratch ticket): fixed 100-point ticket, get an
+    immediate result off a fixed payout table (꽝 70% / 반값 15% / 본전 8% / 3배 5%
+    / 10배 1.8% / 잭팟 50배 0.2%) with a built-in house edge (~0.585x expected
+    return) so it's a points sink, not a grinding strategy - capped at 5
+    plays/day per person. The odds table and average return are always shown
+    on the result embed, not hidden. Only a 3x+ win is posted publicly to the
+    channel - 꽝/반값/본전 results reply ephemerally so 5 plays/day/person
+    doesn't flood busy channels, while a real jackpot-tier win still gets its
+    moment. Half of every "꽝" (total loss) feeds into `/복권 추첨`'s jackpot
+    instead of just vanishing (the other half is still a pure sink).
+  - `/복권 추첨` (draw-style, Powerball-inspired): an admin starts a recurring
+    round with a ticket price and a per-person ticket cap (`시작`, `최대티켓`
+    defaults to 20 - without a cap, one wealthy member could buy enough
+    tickets to effectively lock up that week's odds); people buy tickets
+    (`구매`, blocked past the cap) toward a shared pot (plus whatever jackpot
+    bonus rolled in from `/복권 긁기` losses or a previous no-winner week).
+    `구매` and `확인` both show your own ticket count and win share (e.g.
+    "당신의 티켓: 5장 / 총 40장 (약 12.5%)") alongside the raw pot numbers.
+    Draws happen automatically every Saturday 11:30 PM US Eastern time
+    (`getNextSaturdayNightET` in `points/lotteryDrawService.js` - handles
+    EST/EDT via `Intl.DateTimeFormat`, no extra date library needed), and only
+    have a 35% (`JACKPOT_HIT_CHANCE`) chance of actually paying someone out -
+    on a miss, the whole pot rolls over into next week's round instead of
+    disappearing, so the jackpot visibly grows over consecutive misses before
+    someone finally hits it. A hit pays the weighted-random ticket-holder the
+    ticket pot (10% house cut) plus the full bonus pot (uncut); either way the
+    next round opens automatically (still every Saturday night), so admins
+    only need `시작` once. `뽑기` forces an immediate draw through the same
+    odds/rollover logic (no bypassing), and `종료` stops the recurring cycle
+    entirely and refunds that round's tickets. Auto-draw timers survive bot
+    restarts (re-armed from the DB on startup). The 10% house cut isn't
+    discarded - it's credited to a per-guild "house bank"
+    (`points/houseBankService.js`) that admins spend via
+    `/포인트관리 하우스지급` (to one user, everyone, or a role, with the same
+    `역할`/`제외` filters as `전체지급`/`설정`) and check via
+    `/포인트관리 하우스잔액` - so admin bonus grants are funded by actually
+    collected house edge instead of minting points from nothing.
+- **Wordle points** (`wordle/wordlePointsService.js`, no command - passive):
+  listens for the official Wordle bot's daily results message ("Here are
+  yesterday's results: 4/6: @user ...") and awards 100 points to everyone
+  listed on a solved line (a failed "X/6" line is ignored even if someone's
+  mentioned there). No pings - just a plain follow-up message like "오늘 워들
+  정답자 6명에게 100포인트씩 지급했습니다!". Matches by the results-message
+  author's username ("Wordle"), so it works automatically in whichever channel
+  that bot posts in, no configuration needed.
 - **Birthdays / MBTI / movie polls / secret-santa (마니또)** commands backed by
   MongoDB (`MONGODB_URI` must be set for these to work).
 

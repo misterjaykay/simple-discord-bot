@@ -11,7 +11,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "deploy-commands": "node deploy-commands.js",
-    "clear-guild-commands": "node clear-guild-commands.js"
+    "clear-guild-commands": "node clear-guild-commands.js",
+    "clear-global-commands": "node clear-global-commands.js"
   },
   "repository": {
     "type": "git",

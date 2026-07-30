@@ -8,4 +8,5 @@ module.exports = {
   Prediction: require("./prediction"),
   GuildPointsConfig: require("./guild-points-config"),
   Pet: require("./pet"),
+  Lottery: require("./lottery"),
 };

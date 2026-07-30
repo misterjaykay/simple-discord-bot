@@ -55,6 +55,15 @@ const userPointsSchema = new Schema({
   lastAnniversaryPointsYear: {
     type: Number,
   },
+  // /복권 긁기 (instant lottery) daily play cap - same reset convention as
+  // chatPointsToday/chatPointsDate. See commands/lottery.js.
+  lotteryPlaysToday: {
+    type: Number,
+    default: 0,
+  },
+  lotteryPlaysDate: {
+    type: String,
+  },
 });
 
 userPointsSchema.index({ guildId: 1, userId: 1 }, { unique: true });

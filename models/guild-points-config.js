@@ -21,6 +21,21 @@ const guildPointsConfigSchema = new Schema({
   voicePointsExpiresAt: {
     type: Date,
   },
+  // Banked jackpot contributions from instant-lottery losses (/복권 긁기, see
+  // commands/lottery.js) that arrived while no draw-style round was OPEN.
+  // Swept into the next round's bonusPot when one starts - see
+  // lotteryDrawService.startLottery.
+  lotteryJackpotBank: {
+    type: Number,
+    default: 0,
+  },
+  // "House wallet" funded by the draw-style lottery's ticket house cut (see
+  // lotteryDrawService.runDraw) instead of that cut just vanishing. Admins
+  // spend it via /포인트관리 하우스지급 - see points/houseBankService.js.
+  housePointsBank: {
+    type: Number,
+    default: 0,
+  },
 });
 
 module.exports = mongoose.model("GuildPointsConfig", guildPointsConfigSchema);

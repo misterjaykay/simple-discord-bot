@@ -10,8 +10,10 @@ const { handleVoicemasterComponent } = require("./voicemaster/componentHandler")
 const { handlePredictionComponent } = require("./prediction/componentHandler");
 const { rearmScheduledLocks } = require("./prediction/predictionService");
 const { startVoicePointsInterval, rearmVoiceEventReverts } = require("./points/voicePointsService");
+const { rearmScheduledDraws } = require("./points/lotteryDrawService");
 const { awardChatPoints } = require("./points/chatPointsService");
 const { startBirthdayCheckInterval } = require("./birthday/birthdayPointsService");
+const { handleWordleResultsMessage } = require("./wordle/wordlePointsService");
 
 // Create a new client instance
 const client = new Client({
@@ -40,7 +42,10 @@ function loadCommands(dir) {
     if (!entry.name.endsWith(".js")) continue;
 
     const command = require(fullPath);
-    if (command.deprecated) continue;
+    // `deprecated` = dead/replaced code kept only as a stub. `hidden` = fully
+    // built and working, just not exposed as a usable command yet (e.g. a
+    // feature whose design isn't finalized). Both are skipped the same way.
+    if (command.deprecated || command.hidden) continue;
 
     if ("data" in command && "execute" in command) {
       client.commands.set(command.data.name, command);
@@ -103,6 +108,9 @@ client.once(Events.ClientReady, (c) => {
     startVoicePointsInterval(c);
     rearmVoiceEventReverts().catch((err) => console.error("[points] rearm voice events failed:", err));
     startBirthdayCheckInterval(c);
+    // Re-arm any pending weekly /복권 추첨 draws (see commands/lottery.js) that
+    // were scheduled when the process last stopped.
+    rearmScheduledDraws(c).catch((err) => console.error("[lottery] rearm failed:", err));
   }
 });
 
@@ -111,10 +119,19 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   handleVoiceStateUpdate(oldState, newState).catch((err) => console.error("voiceStateUpdate handler error:", err));
 });
 
-// Chat is also allowed to earn points (capped + cooldown-limited, see
-// chatPointsService.js) so people aren't only rewarded for sitting in voice.
 client.on(Events.MessageCreate, (message) => {
-  if (!message.guild || message.author.bot || !process.env.MONGODB_URI) return;
+  if (!message.guild || !process.env.MONGODB_URI) return;
+
+  if (message.author.bot) {
+    // Daily Wordle results message ("Here are yesterday's results: 4/6: @user
+    // ...") - awards points to everyone who solved it. No-ops for messages
+    // from any other bot or a non-results Wordle message.
+    handleWordleResultsMessage(message).catch((err) => console.error("[wordle] handler error:", err.message));
+    return;
+  }
+
+  // Chat is also allowed to earn points (capped + cooldown-limited, see
+  // chatPointsService.js) so people aren't only rewarded for sitting in voice.
   awardChatPoints(message.guild.id, message.author).catch((err) => console.error("[points] chat award failed:", err.message));
 });
 

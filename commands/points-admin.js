@@ -2,6 +2,7 @@ const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const UserPoints = require("../models/user-points");
 const { addPoints, setPoints } = require("../points/pointsService");
 const { setVoiceEventRate, clearVoiceEventRate, DEFAULT_POINTS_PER_INTERVAL } = require("../points/voicePointsService");
+const { getHouseBank, spendFromHouseBank } = require("../points/houseBankService");
 
 // Shared by 전체지급/설정: pick the guild members an operation should apply to.
 // With no role given, that's everyone (minus bots). With a role given, it's
@@ -77,7 +78,19 @@ module.exports = {
         .addBooleanOption((opt) =>
           opt.setName("복구").setDescription("true로 설정하면 포인트/시간 무시하고 즉시 기본값으로 복구").setRequired(false)
         )
-    ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("하우스지급")
+        .setDescription("추첨식 복권 하우스컷으로 모인 포인트에서 보너스를 지급합니다.")
+        .addIntegerOption((opt) => opt.setName("포인트").setDescription("1인당 지급할 포인트").setMinValue(1).setRequired(true))
+        .addUserOption((opt) => opt.setName("유저").setDescription("특정 유저에게만 지급 (비워두면 전체/역할 대상)").setRequired(false))
+        .addRoleOption((opt) => opt.setName("역할").setDescription("이 역할을 가진 멤버에게만 지급 (비워두면 전체 멤버)").setRequired(false))
+        .addBooleanOption((opt) =>
+          opt.setName("제외").setDescription("반대로 이 역할이 없는 멤버에게만 지급").setRequired(false)
+        )
+    )
+    .addSubcommand((sub) => sub.setName("하우스잔액").setDescription("하우스 포인트 잔액을 확인합니다.")),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
@@ -159,6 +172,52 @@ module.exports = {
         ? `${minutes}분 후 자동으로 기본값으로 복구됩니다.`
         : "`/포인트관리 보이스이벤트 복구:true`로 되돌리기 전까지 계속 유지됩니다.";
       return interaction.reply(`보이스채널 지급 포인트를 5분당 ${points.toLocaleString()}포인트로 변경했습니다. ${durationText}`);
+    }
+
+    if (sub === "하우스잔액") {
+      const balance = await getHouseBank(interaction.guild.id);
+      return interaction.reply({ content: `현재 하우스 잔액: **${balance.toLocaleString()}** 포인트`, ephemeral: true });
+    }
+
+    if (sub === "하우스지급") {
+      const amount = interaction.options.getInteger("포인트");
+      const targetUser = interaction.options.getUser("유저");
+      const role = interaction.options.getRole("역할");
+      const exclude = interaction.options.getBoolean("제외") ?? false;
+      await interaction.deferReply();
+
+      let targetUsers;
+      if (targetUser) {
+        targetUsers = [targetUser];
+      } else {
+        const members = await interaction.guild.members.fetch();
+        targetUsers = [...pickTargets(members, role, exclude).values()].map((m) => m.user);
+      }
+
+      if (targetUsers.length === 0) {
+        return interaction.editReply(role ? "조건에 맞는 멤버가 없어요." : "지급할 멤버가 없어요.");
+      }
+
+      const totalNeeded = amount * targetUsers.length;
+      try {
+        await spendFromHouseBank(interaction.guild.id, totalNeeded);
+      } catch (err) {
+        return interaction.editReply(err.message);
+      }
+
+      for (const user of targetUsers) {
+        await addPoints(interaction.guild.id, user, amount);
+      }
+
+      const remaining = await getHouseBank(interaction.guild.id);
+      const who = targetUser
+        ? `${targetUser}`
+        : role
+          ? `<@&${role.id}> 역할이 ${exclude ? "없는" : "있는"} ${targetUsers.length}명`
+          : `${targetUsers.length}명의 멤버`;
+      return interaction.editReply(
+        `하우스 잔액에서 ${who}에게 ${amount.toLocaleString()} 포인트씩 지급했습니다. (남은 하우스 잔액: ${remaining.toLocaleString()} 포인트)`
+      );
     }
   },
 };

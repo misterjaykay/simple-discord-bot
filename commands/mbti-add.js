@@ -4,6 +4,7 @@ const db = require("../models");
 const VALID_MBTI = ["ISFJ", "ESFJ", "INFJ", "ENFJ", "ISTJ", "ESTJ", "INTJ", "ENTJ", "INFP", "ENFP", "INTP", "ENTP", "ISFP", "ESFP", "ISTP", "ESTP"];
 
 module.exports = {
+  hidden: true, // 현재 사용되지 않아 숨김 처리 (2026-07-30)
   data: new SlashCommandBuilder()
     .setName("mbti")
     .setDescription("MBTI를 등록하고 해당 역할을 부여받습니다.")

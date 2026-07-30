@@ -25,7 +25,9 @@ function collectCommands(dir) {
     if (!entry.name.endsWith(".js")) continue;
 
     const command = require(fullPath);
-    if (command.deprecated) continue;
+    // Same `deprecated`/`hidden` skip as index.js's loader - a hidden command
+    // must never even be registered with Discord, not just left unusable.
+    if (command.deprecated || command.hidden) continue;
     if (!("data" in command)) continue;
 
     commands.push(command.data.toJSON());
