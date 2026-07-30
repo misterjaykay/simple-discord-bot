@@ -9,6 +9,11 @@ const ADOPT_COST = 300;
 const FEED_COST = 20;
 const PLAY_COST = 15;
 
+// "10번의 기회" - mobile-gacha-style reroll allowance. Cost is paid once at
+// final confirmation, not per draw, so rerolling is free as long as you
+// haven't used up all 10 attempts (see pet/adoptSession.js + commands/pet-adopt.js).
+const MAX_ADOPT_ATTEMPTS = 10;
+
 const FEED_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2h - prevents refilling hunger nonstop
 const PLAY_COOLDOWN_MS = 60 * 60 * 1000; // 1h
 
@@ -52,24 +57,33 @@ async function getPet(guildId, userId) {
 // throwing, so the command layer can turn each failure reason into a
 // user-friendly Korean reply without a pile of try/catch.
 
-async function adoptPet(guildId, user) {
+// Side-effect-free check, used both before starting a preview session and
+// again right before actually committing one (confirmAdopt) - someone could
+// adopt from another channel or drop below the cost while rerolling.
+async function checkAdoptEligibility(guildId, user) {
   const existing = await getPet(guildId, user.id);
   if (existing) return { ok: false, reason: "already-have-pet" };
 
   const balance = await getOrCreatePoints(guildId, user);
   if (balance.points < ADOPT_COST) return { ok: false, reason: "not-enough-points" };
 
-  // Only ever hands out first-stage Pokemon that have SOME evolution ahead of
-  // them (see pokeApiClient.getRandomEvolvableBaseSpecies) - normal level-up
-  // lines most of the time, stone/trade/friendship-only lines like Eevee only
-  // rarely. No fully-evolved-only or non-evolving species in the pool.
-  let species;
-  try {
-    species = await getRandomEvolvableBaseSpecies();
-  } catch (err) {
-    console.error("[pet] failed to find an adoptable species:", err.message);
-    return { ok: false, reason: "no-eligible-species" };
-  }
+  return { ok: true };
+}
+
+// Draws one random adoptable candidate (first-stage, evolvable - normal
+// level-up lines most of the time, rare stone/trade/friendship-only lines
+// like Eevee occasionally - see pokeApiClient.getRandomEvolvableBaseSpecies).
+// Doesn't touch points or the DB - purely for preview/reroll.
+async function drawCandidate() {
+  return getRandomEvolvableBaseSpecies();
+}
+
+// Commits a previously-drawn candidate as the user's pet: re-checks
+// eligibility (things may have changed since the preview started), deducts
+// ADOPT_COST, and creates the Pet doc.
+async function confirmAdopt(guildId, user, candidate) {
+  const eligibility = await checkAdoptEligibility(guildId, user);
+  if (!eligibility.ok) return eligibility;
 
   await addPoints(guildId, user, -ADOPT_COST);
 
@@ -77,11 +91,11 @@ async function adoptPet(guildId, user) {
   const pet = await Pet.create({
     guildId,
     userId: user.id,
-    speciesId: species.id,
-    speciesName: species.displayName,
-    spriteUrl: species.spriteUrl,
-    nextEvolutionId: species.nextEvolution.speciesId,
-    nextEvolutionMinLevel: species.nextEvolution.minLevel,
+    speciesId: candidate.id,
+    speciesName: candidate.displayName,
+    spriteUrl: candidate.spriteUrl,
+    nextEvolutionId: candidate.nextEvolution.speciesId,
+    nextEvolutionMinLevel: candidate.nextEvolution.minLevel,
     lastFedAt: now,
     lastPlayedAt: now,
   });
@@ -157,7 +171,9 @@ function getDisplayStats(pet) {
 }
 
 module.exports = {
-  adoptPet,
+  checkAdoptEligibility,
+  drawCandidate,
+  confirmAdopt,
   getPet,
   feedPet,
   playWithPet,
@@ -167,4 +183,5 @@ module.exports = {
   PLAY_COST,
   FEED_COOLDOWN_MS,
   PLAY_COOLDOWN_MS,
+  MAX_ADOPT_ATTEMPTS,
 };

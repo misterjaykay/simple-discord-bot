@@ -107,9 +107,9 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
   `긁기` subcommand and a `추첨` subcommand group, so both games live under a
   single `/복권` entry in Discord's command picker.
   - `/복권 긁기` (instant scratch ticket): fixed 100-point ticket, get an
-    immediate result off a fixed payout table (꽝 70% / 반값 15% / 본전 8% / 3배 5%
-    / 10배 1.8% / 잭팟 50배 0.2%) with a built-in house edge (~0.585x expected
-    return) so it's a points sink, not a grinding strategy - capped at 5
+    immediate result off a fixed payout table (꽝 65% / 반값 19.2% / 본전 9.3% /
+    3배 4.6% / 10배 1.7% / 잭팟 50배 0.2%) with a built-in house edge (~0.597x
+    expected return) so it's a points sink, not a grinding strategy - capped at 5
     plays/day per person. The odds table and average return are always shown
     on the result embed, not hidden. Only a 3x+ win is posted publicly to the
     channel - 꽝/반값/본전 results reply ephemerally so 5 plays/day/person

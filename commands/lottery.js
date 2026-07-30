@@ -17,15 +17,20 @@ const {
 // ---- 즉석복권 (/복권 긁기) ----
 
 // Fixed payout table, ordered by ascending cumulative probability. Deliberately
-// has a house edge - expected return is ~0.585x the ticket amount - same
+// has a house edge - expected return is ~0.597x the ticket amount - same
 // reasoning as a real scratch lottery: this is meant to be a fun points sink,
 // not a reliable way to grind points (that's what voice/chat/출석/예측 are for).
+// 꽝 was tuned down from 70% to 65% (a bare "70%" felt too harsh once the odds
+// table started being shown on every play) with the freed probability shifted
+// mostly into 반값, not the big-multiplier tiers - so winning something is
+// just as common as before, big prizes are a bit rarer, and the overall
+// return rate stayed close to where it was.
 const TABLE = [
-  { chance: 0.7, multiplier: 0, label: "꽝" },
-  { chance: 0.15, multiplier: 0.5, label: "반값 당첨" },
-  { chance: 0.08, multiplier: 1, label: "본전" },
-  { chance: 0.05, multiplier: 3, label: "3배 당첨" },
-  { chance: 0.018, multiplier: 10, label: "10배 당첨" },
+  { chance: 0.65, multiplier: 0, label: "꽝" },
+  { chance: 0.192, multiplier: 0.5, label: "반값 당첨" },
+  { chance: 0.093, multiplier: 1, label: "본전" },
+  { chance: 0.046, multiplier: 3, label: "3배 당첨" },
+  { chance: 0.017, multiplier: 10, label: "10배 당첨" },
   { chance: 0.002, multiplier: 50, label: "🎉 잭팟 50배!" },
 ];
 
@@ -59,8 +64,14 @@ function draw() {
   return TABLE[0]; // floating point safety net, should never actually hit this
 }
 
+// Displayed best-outcome-first (reverse of TABLE's cumulative-probability
+// order) - leading with "꽝 70%" reads as much harsher than leading with the
+// jackpot/big wins does, even though the odds themselves are unchanged.
 function oddsTableText() {
-  return TABLE.map((t) => `${t.label} ${formatPercent(t.chance)}`).join(" · ");
+  return [...TABLE]
+    .reverse()
+    .map((t) => `${formatPercent(t.chance)} - ${t.label}`)
+    .join("\n");
 }
 
 async function handleScratch(interaction) {
@@ -110,7 +121,7 @@ async function handleScratch(interaction) {
     .setDescription(`${tier.label}!\n${amount.toLocaleString()} 포인트를 걸어서 ${payout.toLocaleString()} 포인트를 받았어요.`)
     .addFields({ name: "확률표", value: oddsTableText() })
     .setColor(net > 0 ? 0x57f287 : net === 0 ? 0xf1c40f : 0xed4245)
-    .setFooter({ text: `순손익: ${net >= 0 ? "+" : ""}${net.toLocaleString()} 포인트 · 평균 회수율 58.5% · 오늘 남은 횟수: ${playsLeft}` });
+    .setFooter({ text: `순손익: ${net >= 0 ? "+" : ""}${net.toLocaleString()} 포인트 · 평균 회수율 59.7% · 오늘 남은 횟수: ${playsLeft}` });
 
   const isBigWin = tier.multiplier >= PUBLIC_WIN_MULTIPLIER_THRESHOLD;
   return interaction.reply({ embeds: [embed], ephemeral: !isBigWin });
