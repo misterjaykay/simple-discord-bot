@@ -2,7 +2,6 @@ const { SlashCommandBuilder } = require("discord.js");
 const db = require("../models");
 
 module.exports = {
-  deprecated: true, // Old birthday command, unused for now — hidden from command loading.
   data: new SlashCommandBuilder()
     .setName("생일추가")
     .setDescription("내 생일을 등록합니다.")

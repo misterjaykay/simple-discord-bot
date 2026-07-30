@@ -7,4 +7,5 @@ module.exports = {
   UserPoints: require("./user-points"),
   Prediction: require("./prediction"),
   GuildPointsConfig: require("./guild-points-config"),
+  Pet: require("./pet"),
 };

@@ -35,9 +35,17 @@ module.exports = {
         .addIntegerOption((opt) =>
           opt
             .setName("시간")
-            .setDescription("몇 분 후 자동으로 마감할지 (비워두면 /예측 마감 으로 직접 마감)")
-            .setMinValue(1)
+            .setDescription("몇 분 후 자동으로 마감할지 (초와 함께 쓸 수 있음, 비워두면 /예측 마감 으로 직접 마감)")
+            .setMinValue(0)
             .setMaxValue(10080)
+            .setRequired(false)
+        )
+        .addIntegerOption((opt) =>
+          opt
+            .setName("초")
+            .setDescription("긴박한 예측용 - 몇 초 후 마감할지 (시간과 더해짐, 예: 시간:0 초:30 = 30초 후 마감)")
+            .setMinValue(0)
+            .setMaxValue(59)
             .setRequired(false)
         )
         .addChannelOption((opt) =>
@@ -88,8 +96,15 @@ module.exports = {
 
       const question = interaction.options.getString("질문");
       const options = ["옵션1", "옵션2", "옵션3", "옵션4"].map((key) => interaction.options.getString(key)).filter(Boolean);
-      const minutes = interaction.options.getInteger("시간");
-      const lockAt = minutes ? new Date(Date.now() + minutes * 60 * 1000) : undefined;
+      const minutes = interaction.options.getInteger("시간") ?? 0;
+      const seconds = interaction.options.getInteger("초") ?? 0;
+      const durationMs = minutes * 60 * 1000 + seconds * 1000;
+
+      if (durationMs > 0 && durationMs < 5000) {
+        return interaction.reply({ content: "너무 짧아요. 최소 5초 이상으로 설정해주세요.", ephemeral: true });
+      }
+
+      const lockAt = durationMs > 0 ? new Date(Date.now() + durationMs) : undefined;
       const targetChannel = interaction.options.getChannel("채널") ?? interaction.channel;
 
       const botPermissions = targetChannel.permissionsFor(interaction.guild.members.me);

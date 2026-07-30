@@ -11,6 +11,7 @@ const { handlePredictionComponent } = require("./prediction/componentHandler");
 const { rearmScheduledLocks } = require("./prediction/predictionService");
 const { startVoicePointsInterval, rearmVoiceEventReverts } = require("./points/voicePointsService");
 const { awardChatPoints } = require("./points/chatPointsService");
+const { startBirthdayCheckInterval } = require("./birthday/birthdayPointsService");
 
 // Create a new client instance
 const client = new Client({
@@ -101,6 +102,7 @@ client.once(Events.ClientReady, (c) => {
   if (process.env.MONGODB_URI) {
     startVoicePointsInterval(c);
     rearmVoiceEventReverts().catch((err) => console.error("[points] rearm voice events failed:", err));
+    startBirthdayCheckInterval(c);
   }
 });
 

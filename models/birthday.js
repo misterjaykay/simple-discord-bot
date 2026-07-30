@@ -21,7 +21,12 @@ const birthdaySchema = new Schema({
   createdDate: {
     type: Date,
     default: Date.now,
-  }
+  },
+  // Guards the birthday points bonus (see birthday/birthdayPointsService.js)
+  // against being paid out more than once in the same year.
+  lastBirthdayPointsYear: {
+    type: Number,
+  },
 });
 
 const Birthday = mongoose.model("Birthday", birthdaySchema);

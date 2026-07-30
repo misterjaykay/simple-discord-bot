@@ -92,12 +92,14 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
   it drops as a side gets more action and rises on the side fewer people back.
   Each option lists who bet how much, live, right in the channel while betting
   is still open - not just the aggregate pot.
-  `/예측 생성`'s optional `시간` option (minutes) auto-locks the prediction once
-  the deadline passes - same effect as running `/예측 마감` manually, and the
-  countdown shows live on the message via Discord's auto-updating timestamp.
-  Auto-lock timers survive bot restarts (re-armed from the DB on startup). An
-  optional `채널` option lets admins post the prediction to a different text
-  channel than the one they ran the command in.
+  `/예측 생성`'s optional `시간` (minutes) and `초` (seconds, 0-59) options add
+  together to auto-lock the prediction once the deadline passes - same effect
+  as running `/예측 마감` manually - so a quick, tense prediction can use just
+  `초:30` for a 30-second countdown instead of being stuck with whole minutes.
+  The countdown shows live on the message via Discord's auto-updating
+  timestamp, and auto-lock timers survive bot restarts (re-armed from the DB
+  on startup). An optional `채널` option lets admins post the prediction to a
+  different text channel than the one they ran the command in.
   `/예측 마감` stops new bets, `/예측 종료 승리옵션:` settles it - winners split
   the losing side's pot proportionally to their stake, and `/예측 취소` refunds
   everyone if needed.

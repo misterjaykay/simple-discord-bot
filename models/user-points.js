@@ -32,6 +32,29 @@ const userPointsSchema = new Schema({
   chatPointsDate: {
     type: String, // "YYYY-MM-DD" in server-local time
   },
+  // /출석 (daily check-in) bookkeeping - see points/checkinService.js.
+  lastCheckinDate: {
+    type: String, // "YYYY-MM-DD", same convention as chatPointsDate
+  },
+  checkinStreak: {
+    type: Number,
+    default: 0,
+  },
+  totalCheckins: {
+    type: Number,
+    default: 0,
+  },
+  // Date of this user's very first /출석, used as the denominator for
+  // attendance rate instead of their server-join date (they may have joined
+  // long before the check-in feature existed).
+  firstCheckinDate: {
+    type: String,
+  },
+  // Guards the join-anniversary bonus (see birthday/birthdayPointsService.js)
+  // against being paid out more than once in the same year.
+  lastAnniversaryPointsYear: {
+    type: Number,
+  },
 });
 
 userPointsSchema.index({ guildId: 1, userId: 1 }, { unique: true });
