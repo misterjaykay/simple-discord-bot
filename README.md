@@ -117,11 +117,16 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
     moment. Half of every "꽝" (total loss) feeds into `/복권 추첨`'s jackpot
     instead of just vanishing (the other half is still a pure sink).
   - `/복권 추첨` (draw-style, Powerball-inspired): an admin starts a recurring
-    round with a ticket price and a per-person ticket cap (`시작`, `최대티켓`
-    defaults to 20 - without a cap, one wealthy member could buy enough
-    tickets to effectively lock up that week's odds); people buy tickets
-    (`구매`, blocked past the cap) toward a shared pot (plus whatever jackpot
-    bonus rolled in from `/복권 긁기` losses or a previous no-winner week).
+    round with a fixed 50-point ticket price (`DEFAULT_TICKET_PRICE`, no
+    command option - 100 felt too steep against the 1000-point seed jackpot,
+    10 felt too cheap to grow the pot meaningfully) and a per-person ticket
+    cap (`시작`, `최대티켓` defaults to 20 - without a cap, one wealthy member
+    could buy enough tickets to effectively lock up that week's odds); people buy tickets
+    (`구매`, blocked past the cap) toward a shared pot. Every fresh `시작`
+    seeds the jackpot with a flat 1000 points (`SEED_JACKPOT`, no command
+    option for it) so the very first week isn't underwhelming, on top of
+    whatever jackpot bonus rolled in from `/복권 긁기` losses or a previous
+    no-winner week.
     `구매` and `확인` both show your own ticket count and win share (e.g.
     "당신의 티켓: 5장 / 총 40장 (약 12.5%)") alongside the raw pot numbers.
     Draws happen automatically every Saturday 11:30 PM US Eastern time

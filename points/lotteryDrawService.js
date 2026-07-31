@@ -26,6 +26,20 @@ const JACKPOT_HIT_CHANCE = 0.35;
 // /복권 추첨 시작's 최대티켓 option.
 const DEFAULT_MAX_TICKETS_PER_PERSON = 20;
 
+// Guaranteed baseline jackpot every time a fresh cycle is `시작`'d - no command
+// option for this, just a flat constant, so a brand new round always has at
+// least something worth playing for even before any rollover or instant-lottery
+// bleed-through has built up.
+const SEED_JACKPOT = 1000;
+
+// Fixed ticket price, no command option - same reasoning as the instant
+// lottery's fixed 100-point price. 100 felt too steep relative to the 1000
+// SEED_JACKPOT (10% of it per ticket discourages buying in), and 10 felt too
+// cheap to meaningfully grow the pot; 50 lines up with the
+// DEFAULT_MAX_TICKETS_PER_PERSON cap (20 × 50 = 1000, roughly one active
+// week's easy voice/chat income spent on a full buy-in).
+const DEFAULT_TICKET_PRICE = 50;
+
 const DRAW_DAY = 6; // Saturday (Sunday = 0 ... Saturday = 6)
 const DRAW_HOUR = 23;
 const DRAW_MINUTE = 30;
@@ -118,7 +132,11 @@ async function startLottery(guildId, userId, ticketPrice, maxTicketsPerPerson = 
   const existing = await Lottery.findOne({ guildId, status: "OPEN" });
   if (existing) throw new Error("이미 진행중인 추첨 라운드가 있습니다.");
 
-  const bonusPot = await sweepBankedJackpot(guildId);
+  // A brand new cycle otherwise starts at 0 unless a rollover or instant-lottery
+  // bleed-through has already banked something, which can make the very first
+  // week feel underwhelming - SEED_JACKPOT guarantees every fresh `시작` has at
+  // least a baseline pot worth playing for, on top of whatever's banked.
+  const bonusPot = SEED_JACKPOT + (await sweepBankedJackpot(guildId));
   const drawAt = getNextSaturdayNightET();
 
   return Lottery.create({ guildId, ticketPrice, maxTicketsPerPerson, createdBy: userId, bonusPot, drawAt });
@@ -347,4 +365,6 @@ module.exports = {
   HOUSE_CUT_PERCENT,
   JACKPOT_HIT_CHANCE,
   DEFAULT_MAX_TICKETS_PER_PERSON,
+  SEED_JACKPOT,
+  DEFAULT_TICKET_PRICE,
 };

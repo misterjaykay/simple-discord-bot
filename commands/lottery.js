@@ -12,6 +12,8 @@ const {
   totalPot,
   JACKPOT_HIT_CHANCE,
   DEFAULT_MAX_TICKETS_PER_PERSON,
+  SEED_JACKPOT,
+  DEFAULT_TICKET_PRICE,
 } = require("../points/lotteryDrawService");
 
 // ---- 즉석복권 (/복권 긁기) ----
@@ -173,19 +175,19 @@ async function handleDraw(interaction, sub) {
     if (!isAdmin(interaction)) {
       return interaction.reply({ content: "이 명령어는 서버 관리자만 사용할 수 있어요.", ephemeral: true });
     }
-    const ticketPrice = interaction.options.getInteger("티켓가격");
     const maxTickets = interaction.options.getInteger("최대티켓") ?? DEFAULT_MAX_TICKETS_PER_PERSON;
 
     let lottery;
     try {
-      lottery = await startLottery(guildId, interaction.user.id, ticketPrice, maxTickets);
+      lottery = await startLottery(guildId, interaction.user.id, DEFAULT_TICKET_PRICE, maxTickets);
     } catch (err) {
       return interaction.reply({ content: err.message, ephemeral: true });
     }
     scheduleWeeklyDraw(interaction.client, lottery);
 
     return interaction.reply(
-      `🎟️ 추첨 복권을 시작했습니다! 티켓 1장 = ${ticketPrice.toLocaleString()} 포인트 (1인당 최대 ${maxTickets}장). ` +
+      `🎟️ 추첨 복권을 시작했습니다! 티켓 1장 = ${DEFAULT_TICKET_PRICE.toLocaleString()} 포인트 (1인당 최대 ${maxTickets}장). ` +
+        `기본 잭팟 ${SEED_JACKPOT.toLocaleString()} 포인트로 시작합니다. ` +
         `매주 토요일 밤 11:30(미국 동부시간)에 자동 추첨되며, 다음 추첨은 <t:${Math.floor(lottery.drawAt.getTime() / 1000)}:F>입니다. ` +
         "`/복권 추첨 구매`로 참여하세요."
     );
@@ -255,8 +257,7 @@ module.exports = {
         .addSubcommand((sub) =>
           sub
             .setName("시작")
-            .setDescription("추첨 라운드를 시작합니다 - 그 뒤로는 매주 자동으로 추첨/이월됩니다. (관리자 전용)")
-            .addIntegerOption((opt) => opt.setName("티켓가격").setDescription("티켓 1장당 포인트").setMinValue(1).setRequired(true))
+            .setDescription(`추첨 라운드를 시작합니다 (티켓 ${DEFAULT_TICKET_PRICE}포인트 고정) - 그 뒤로는 매주 자동으로 추첨/이월됩니다. (관리자 전용)`)
             .addIntegerOption((opt) =>
               opt
                 .setName("최대티켓")
