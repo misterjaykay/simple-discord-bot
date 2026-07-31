@@ -103,6 +103,13 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
   `/예측 마감` stops new bets, `/예측 종료 승리옵션:` settles it - winners split
   the losing side's pot proportionally to their stake, and `/예측 취소` refunds
   everyone if needed.
+  Moderators can also block a specific person from placing new bets with
+  `/예측제재 부여` (`기간` in minutes, optional - omit for indefinite until
+  `/예측제재 해제`; `사유` optional) - a manual warning tool for things like chat
+  profanity, not an automated filter. `/예측제재 확인` checks a user's current
+  status. Visible by default to anyone with Discord's "Timeout Members"
+  permission; grant it to a dedicated moderator role without full
+  Administrator via Server Settings > Integrations if needed.
 - **Lottery** (`/복권`, `commands/lottery.js`): one parent command with a
   `긁기` subcommand and a `추첨` subcommand group, so both games live under a
   single `/복권` entry in Discord's command picker.

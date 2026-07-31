@@ -64,6 +64,21 @@ const userPointsSchema = new Schema({
   lotteryPlaysDate: {
     type: String,
   },
+  // Manual moderation action (e.g. someone cursed in chat) that blocks a user
+  // from placing new /예측 bets - never automated, always applied by a mod via
+  // /예측제재. See prediction/predictionBanService.js.
+  predictionBanned: {
+    type: Boolean,
+    default: false,
+  },
+  // Optional auto-expiry for the above - null/unset means the ban is
+  // indefinite until a mod runs /예측제재 해제.
+  predictionBanUntil: {
+    type: Date,
+  },
+  predictionBanReason: {
+    type: String,
+  },
 });
 
 userPointsSchema.index({ guildId: 1, userId: 1 }, { unique: true });

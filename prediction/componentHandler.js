@@ -1,6 +1,7 @@
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require("discord.js");
 const Prediction = require("../models/prediction");
 const { getOrCreatePoints } = require("../points/pointsService");
+const { getBanStatus, banMessage } = require("./predictionBanService");
 const { refreshPredictionMessage, computeOdds } = require("./predictionView");
 
 async function handlePredictionComponent(interaction) {
@@ -8,6 +9,11 @@ async function handlePredictionComponent(interaction) {
 
   // Clicking an option button just opens a modal asking how many points to bet.
   if (customId.startsWith("pred:bet:")) {
+    const banStatus = await getBanStatus(interaction.guild.id, interaction.user);
+    if (banStatus.banned) {
+      return interaction.reply({ content: banMessage(banStatus), ephemeral: true });
+    }
+
     const optionIndex = Number(customId.split(":")[2]);
     const prediction = await Prediction.findOne({ guildId: interaction.guild.id, status: "OPEN" });
     if (!prediction) {
@@ -34,6 +40,13 @@ async function handlePredictionComponent(interaction) {
   }
 
   if (customId.startsWith("pred:bet_modal:")) {
+    // Re-checked here too (not just at the button click) in case a mod applies
+    // /예측제재 in the brief window between opening the modal and submitting it.
+    const banStatus = await getBanStatus(interaction.guild.id, interaction.user);
+    if (banStatus.banned) {
+      return interaction.reply({ content: banMessage(banStatus), ephemeral: true });
+    }
+
     const optionIndex = Number(customId.split(":")[2]);
     const amountRaw = interaction.fields.getTextInputValue("amount");
     const amount = Number.parseInt(amountRaw, 10);
