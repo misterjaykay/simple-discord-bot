@@ -43,6 +43,10 @@ const lotterySchema = new Schema({
   // When the next automatic weekly drawing should happen (re-armed from the
   // DB on startup, same pattern as prediction auto-lock / voice point events).
   drawAt: { type: Date },
+  // Channel to post the 30-min-before announcement and 10-min-before ticket-
+  // buyer ping to (see points/lotteryDrawService.js). Captured from wherever
+  // `/복권 추첨 시작` was run and carried forward to each auto-opened next round.
+  announceChannelId: { type: String },
   winnerId: { type: String },
   winnerPayout: { type: Number },
   createdBy: { type: String, required: true },

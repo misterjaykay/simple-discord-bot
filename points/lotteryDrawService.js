@@ -50,9 +50,17 @@ const DRAW_TIME_ZONE = "America/New_York";
 // schedulers in this codebase).
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
+// How long before the actual draw the heads-up announcement and the
+// ticket-buyer ping go out (see scheduleWeeklyDraw / sendPreDrawAnnouncement /
+// sendPreDrawReminder below).
+const ANNOUNCE_BEFORE_MS = 30 * 60 * 1000;
+const REMINDER_BEFORE_MS = 10 * 60 * 1000;
+
 // In-memory only - re-armed from the DB on startup (see rearmScheduledDraws)
 // so a Railway restart/redeploy doesn't lose a pending weekly draw.
 const scheduledDraws = new Map(); // guildId -> Timeout
+const scheduledAnnouncements = new Map(); // guildId -> Timeout
+const scheduledReminders = new Map(); // guildId -> Timeout
 
 // Reads a Date's wall-clock date/time as seen in a given IANA time zone,
 // without needing a date library - Intl.DateTimeFormat already knows the
@@ -128,7 +136,7 @@ async function sweepBankedJackpot(guildId) {
   return config?.lotteryJackpotBank || 0;
 }
 
-async function startLottery(guildId, userId, ticketPrice, maxTicketsPerPerson = DEFAULT_MAX_TICKETS_PER_PERSON) {
+async function startLottery(guildId, userId, ticketPrice, maxTicketsPerPerson = DEFAULT_MAX_TICKETS_PER_PERSON, announceChannelId) {
   const existing = await Lottery.findOne({ guildId, status: "OPEN" });
   if (existing) throw new Error("이미 진행중인 추첨 라운드가 있습니다.");
 
@@ -139,7 +147,7 @@ async function startLottery(guildId, userId, ticketPrice, maxTicketsPerPerson = 
   const bonusPot = SEED_JACKPOT + (await sweepBankedJackpot(guildId));
   const drawAt = getNextSaturdayNightET();
 
-  return Lottery.create({ guildId, ticketPrice, maxTicketsPerPerson, createdBy: userId, bonusPot, drawAt });
+  return Lottery.create({ guildId, ticketPrice, maxTicketsPerPerson, createdBy: userId, bonusPot, drawAt, announceChannelId });
 }
 
 // Admin-only "turn the whole recurring cycle off". Refunds any tickets bought
@@ -150,7 +158,7 @@ async function stopLottery(guildId) {
   const lottery = await Lottery.findOne({ guildId, status: "OPEN" });
   if (!lottery) throw new Error("진행중인 추첨 라운드가 없습니다.");
 
-  clearScheduledDraw(guildId);
+  clearAllScheduledTimers(guildId);
 
   for (const entry of lottery.tickets) {
     await addPoints(guildId, { id: entry.userId, username: entry.username }, entry.count * lottery.ticketPrice);
@@ -209,24 +217,107 @@ function clearScheduledDraw(guildId) {
   }
 }
 
+function clearScheduledAnnouncement(guildId) {
+  const timer = scheduledAnnouncements.get(guildId);
+  if (timer) {
+    clearTimeout(timer);
+    scheduledAnnouncements.delete(guildId);
+  }
+}
+
+function clearScheduledReminder(guildId) {
+  const timer = scheduledReminders.get(guildId);
+  if (timer) {
+    clearTimeout(timer);
+    scheduledReminders.delete(guildId);
+  }
+}
+
+function clearAllScheduledTimers(guildId) {
+  clearScheduledDraw(guildId);
+  clearScheduledAnnouncement(guildId);
+  clearScheduledReminder(guildId);
+}
+
+// Heads-up post 30 minutes before the draw - "it's happening tonight, buy in
+// if you haven't". No-ops quietly if the round has no announceChannelId set
+// (older rounds created before this feature existed) or the channel's gone.
+async function sendPreDrawAnnouncement(guildId, client) {
+  try {
+    const lottery = await Lottery.findOne({ guildId, status: "OPEN" });
+    if (!lottery || !lottery.announceChannelId || !lottery.drawAt) return;
+
+    const channel = await client.channels.fetch(lottery.announceChannelId).catch(() => null);
+    if (!channel) return;
+
+    await channel.send(
+      `⏰ 오늘 밤 <t:${Math.floor(lottery.drawAt.getTime() / 1000)}:t>에 추첨 복권이 진행됩니다! ` +
+        `현재 판돈 ${totalPot(lottery).toLocaleString()} 포인트, 판매된 티켓 ${totalTickets(lottery)}장. ` +
+        "아직 안 사셨다면 `/복권 추첨 구매`로 참여하세요!"
+    );
+  } catch (err) {
+    console.error(`[lottery] pre-draw announcement failed for guild ${guildId}:`, err.message);
+  }
+}
+
+// Ping everyone who bought a ticket this round, 10 minutes before the draw.
+async function sendPreDrawReminder(guildId, client) {
+  try {
+    const lottery = await Lottery.findOne({ guildId, status: "OPEN" });
+    if (!lottery || !lottery.announceChannelId || !lottery.drawAt) return;
+    if (lottery.tickets.length === 0) return;
+
+    const channel = await client.channels.fetch(lottery.announceChannelId).catch(() => null);
+    if (!channel) return;
+
+    const mentions = lottery.tickets.map((t) => `<@${t.userId}>`).join(" ");
+    await channel.send(`🎟️ 10분 뒤 <t:${Math.floor(lottery.drawAt.getTime() / 1000)}:t>에 추첨이 진행됩니다! 행운을 빕니다 ${mentions}`);
+  } catch (err) {
+    console.error(`[lottery] pre-draw reminder failed for guild ${guildId}:`, err.message);
+  }
+}
+
 function scheduleWeeklyDraw(client, lottery) {
   if (!lottery.drawAt) return;
 
   const guildId = lottery.guildId;
-  clearScheduledDraw(guildId);
+  clearAllScheduledTimers(guildId);
 
-  const delay = Math.min(Math.max(lottery.drawAt.getTime() - Date.now(), 0), MAX_TIMEOUT_MS);
-  const timer = setTimeout(() => {
+  const drawTime = lottery.drawAt.getTime();
+
+  const drawDelay = Math.min(Math.max(drawTime - Date.now(), 0), MAX_TIMEOUT_MS);
+  const drawTimer = setTimeout(() => {
     scheduledDraws.delete(guildId);
     runDraw(guildId, client).catch((err) => console.error(`[lottery] scheduled draw failed for guild ${guildId}:`, err.message));
-  }, delay);
+  }, drawDelay);
+  scheduledDraws.set(guildId, drawTimer);
 
-  scheduledDraws.set(guildId, timer);
+  // Unlike the draw itself, these two are skipped entirely (not fired late) if
+  // a restart lands after their moment has already passed - a "10 minutes
+  // left!" ping sent 2 minutes before the draw would be more confusing than
+  // just not sending it.
+  const announceDelay = drawTime - ANNOUNCE_BEFORE_MS - Date.now();
+  if (announceDelay > 0 && announceDelay <= MAX_TIMEOUT_MS) {
+    const announceTimer = setTimeout(() => {
+      scheduledAnnouncements.delete(guildId);
+      sendPreDrawAnnouncement(guildId, client);
+    }, announceDelay);
+    scheduledAnnouncements.set(guildId, announceTimer);
+  }
+
+  const reminderDelay = drawTime - REMINDER_BEFORE_MS - Date.now();
+  if (reminderDelay > 0 && reminderDelay <= MAX_TIMEOUT_MS) {
+    const reminderTimer = setTimeout(() => {
+      scheduledReminders.delete(guildId);
+      sendPreDrawReminder(guildId, client);
+    }, reminderDelay);
+    scheduledReminders.set(guildId, reminderTimer);
+  }
 }
 
 // Runs after every draw (win, rollover, or the zero-ticket edge case) to keep
 // the weekly cycle going automatically - only stopLottery breaks the chain.
-async function openNextRound(guildId, ticketPrice, maxTicketsPerPerson, carryOverBonus, client) {
+async function openNextRound(guildId, ticketPrice, maxTicketsPerPerson, carryOverBonus, client, announceChannelId) {
   const bankedBonus = await sweepBankedJackpot(guildId);
   const drawAt = getNextSaturdayNightET();
 
@@ -237,6 +328,7 @@ async function openNextRound(guildId, ticketPrice, maxTicketsPerPerson, carryOve
     createdBy: "system", // auto-opened, not admin-triggered
     bonusPot: carryOverBonus + bankedBonus,
     drawAt,
+    announceChannelId,
   });
 
   if (client) scheduleWeeklyDraw(client, next);
@@ -254,7 +346,7 @@ async function runDraw(guildId, client) {
   const lottery = await Lottery.findOne({ guildId, status: "OPEN" });
   if (!lottery) throw new Error("진행중인 추첨 라운드가 없습니다.");
 
-  clearScheduledDraw(guildId);
+  clearAllScheduledTimers(guildId);
   const tickets = totalTickets(lottery);
   const maxTicketsPerPerson = lottery.maxTicketsPerPerson || DEFAULT_MAX_TICKETS_PER_PERSON;
 
@@ -263,7 +355,7 @@ async function runDraw(guildId, client) {
     lottery.status = "CANCELLED";
     lottery.resolvedAt = new Date();
     await lottery.save();
-    await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, lottery.bonusPot || 0, client);
+    await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, lottery.bonusPot || 0, client, lottery.announceChannelId);
     return { outcome: "no_tickets", pot: lottery.bonusPot || 0 };
   }
 
@@ -279,7 +371,7 @@ async function runDraw(guildId, client) {
     lottery.status = "ROLLOVER";
     lottery.resolvedAt = new Date();
     await lottery.save();
-    await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, pot, client);
+    await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, pot, client, lottery.announceChannelId);
     return { outcome: "rollover", pot, ticketsSold: tickets };
   }
 
@@ -310,7 +402,7 @@ async function runDraw(guildId, client) {
   lottery.resolvedAt = new Date();
   await lottery.save();
 
-  await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, 0, client);
+  await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, 0, client, lottery.announceChannelId);
 
   return { outcome: "win", winnerId: winner.userId, payout, pot, ticketsSold: tickets };
 }

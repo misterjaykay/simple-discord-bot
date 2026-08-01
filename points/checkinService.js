@@ -8,10 +8,10 @@ const BASE_POINTS = 30;
 const STREAK_BONUS_PER_DAY = 2;
 const STREAK_BONUS_CAP = 20; // bonus maxes out once the streak hits 11 days
 
+// Derived from todayString() (24h earlier) rather than a plain UTC-1 shift, so
+// streak continuity uses the exact same noon-ET day boundary as "today" does.
 function yesterdayString() {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return todayString(new Date(Date.now() - 24 * 60 * 60 * 1000));
 }
 
 // Returns { alreadyCheckedIn, awarded, streak, totalCheckins }. alreadyCheckedIn
