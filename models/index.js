@@ -9,4 +9,6 @@ module.exports = {
   GuildPointsConfig: require("./guild-points-config"),
   Pet: require("./pet"),
   Lottery: require("./lottery"),
+  LogConfig: require("./log-config"),
+  MessageLogCache: require("./message-log-cache"),
 };

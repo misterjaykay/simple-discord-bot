@@ -3,7 +3,7 @@ require("dotenv").config();
 const fs = require("fs");
 const path = require("node:path");
 const mongoose = require("mongoose");
-const { Client, Collection, Events, GatewayIntentBits, ActivityType } = require("discord.js");
+const { Client, Collection, Events, GatewayIntentBits, Partials, ActivityType } = require("discord.js");
 
 const { handleVoiceStateUpdate } = require("./voicemaster/voiceStateHandler");
 const { handleVoicemasterComponent } = require("./voicemaster/componentHandler");
@@ -15,6 +15,11 @@ const { rearmScheduledDraws } = require("./points/lotteryDrawService");
 const { awardChatPoints } = require("./points/chatPointsService");
 const { startBirthdayCheckInterval } = require("./birthday/birthdayPointsService");
 const { handleWordleResultsMessage } = require("./wordle/wordlePointsService");
+const { refreshMessageLogGuildCache } = require("./logging/logConfigService");
+const { logVoiceStateChange } = require("./logging/voiceLogHandler");
+const { cacheMessage, logMessageUpdate, logMessageDelete } = require("./logging/messageLogHandler");
+const { logMemberAdd, logMemberRemove } = require("./logging/joinLeaveLogHandler");
+const { logChannelCreate, logChannelDelete } = require("./logging/serverLogHandler");
 
 // Create a new client instance
 const client = new Client({
@@ -23,8 +28,14 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
     GatewayIntentBits.DirectMessages,
   ],
+  // Message partials are required for messageUpdate/messageDelete to fire at all
+  // on messages discord.js hasn't cached (e.g. sent before the bot last
+  // restarted) - without this, uncached message edits/deletes are silently
+  // dropped instead of reaching our log handlers.
+  partials: [Partials.Message, Partials.Channel],
 });
 
 client.commands = new Collection();
@@ -112,16 +123,27 @@ client.once(Events.ClientReady, (c) => {
     // Re-arm any pending weekly /복권 추첨 draws (see commands/lottery.js) that
     // were scheduled when the process last stopped.
     rearmScheduledDraws(c).catch((err) => console.error("[lottery] rearm failed:", err));
+
+    // Logging: warm the message-log guild set (see logging/logConfigService.js)
+    // and the member cache (join-leave-log needs every member's joinedAt to
+    // compute "Nth to join" rankings).
+    refreshMessageLogGuildCache().catch((err) => console.error("[logging] failed to load message-log guild cache:", err.message));
+    for (const guild of c.guilds.cache.values()) {
+      guild.members.fetch().catch((err) => console.error(`[logging] failed to fetch members for guild ${guild.id}:`, err.message));
+    }
   }
 });
 
 // Voicemaster join-to-create system: creates/cleans up personal temp voice channels.
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   handleVoiceStateUpdate(oldState, newState).catch((err) => console.error("voiceStateUpdate handler error:", err));
+  logVoiceStateChange(oldState, newState).catch((err) => console.error("[logging] voiceStateUpdate error:", err.message));
 });
 
 client.on(Events.MessageCreate, (message) => {
   if (!message.guild || !process.env.MONGODB_URI) return;
+
+  cacheMessage(message).catch((err) => console.error("[logging] cacheMessage error:", err.message));
 
   if (message.author.bot) {
     // Daily Wordle results message ("Here are yesterday's results: 4/6: @user
@@ -134,6 +156,36 @@ client.on(Events.MessageCreate, (message) => {
   // Chat is also allowed to earn points (capped + cooldown-limited, see
   // chatPointsService.js) so people aren't only rewarded for sitting in voice.
   awardChatPoints(message.guild.id, message.author).catch((err) => console.error("[points] chat award failed:", err.message));
+});
+
+client.on(Events.MessageUpdate, (oldMessage, newMessage) => {
+  if (!process.env.MONGODB_URI) return;
+  logMessageUpdate(oldMessage, newMessage).catch((err) => console.error("[logging] messageUpdate error:", err.message));
+});
+
+client.on(Events.MessageDelete, (message) => {
+  if (!process.env.MONGODB_URI) return;
+  logMessageDelete(message).catch((err) => console.error("[logging] messageDelete error:", err.message));
+});
+
+client.on(Events.GuildMemberAdd, (member) => {
+  if (!process.env.MONGODB_URI) return;
+  logMemberAdd(member).catch((err) => console.error("[logging] guildMemberAdd error:", err.message));
+});
+
+client.on(Events.GuildMemberRemove, (member) => {
+  if (!process.env.MONGODB_URI) return;
+  logMemberRemove(member).catch((err) => console.error("[logging] guildMemberRemove error:", err.message));
+});
+
+client.on(Events.ChannelCreate, (channel) => {
+  if (!process.env.MONGODB_URI) return;
+  logChannelCreate(channel).catch((err) => console.error("[logging] channelCreate error:", err.message));
+});
+
+client.on(Events.ChannelDelete, (channel) => {
+  if (!process.env.MONGODB_URI) return;
+  logChannelDelete(channel).catch((err) => console.error("[logging] channelDelete error:", err.message));
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
