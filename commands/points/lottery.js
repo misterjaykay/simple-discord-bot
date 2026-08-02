@@ -1,13 +1,15 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require("discord.js");
 const Lottery = require("../../models/lottery");
 const { getOrCreatePoints, todayString } = require("../../points/pointsService");
 const {
   startLottery,
   stopLottery,
   buyTickets,
+  setAnnounceChannel,
   runDraw,
   scheduleWeeklyDraw,
   addJackpotContribution,
+  formatDrawResultMessage,
   totalTickets,
   totalPot,
   JACKPOT_HIT_CHANCE,
@@ -223,25 +225,26 @@ async function handleDraw(interaction, sub) {
     }
     try {
       const result = await runDraw(guildId, interaction.client);
-
-      if (result.outcome === "no_tickets") {
-        return interaction.reply(
-          `아무도 티켓을 사지 않아서 이번 회차는 취소되었고, 잭팟 ${result.pot.toLocaleString()} 포인트는 다음 라운드로 이월됩니다.`
-        );
-      }
-
-      if (result.outcome === "rollover") {
-        return interaction.reply(
-          `😮 이번엔 당첨자가 나오지 않았어요! 판돈 ${result.pot.toLocaleString()} 포인트는 전부 다음 라운드로 이월됩니다.`
-        );
-      }
-
-      return interaction.reply(
-        `🎉 <@${result.winnerId}> 님이 당첨되었습니다! 판돈 ${result.pot.toLocaleString()} 포인트 중 ${result.payout.toLocaleString()} 포인트를 받았습니다. (티켓 ${result.ticketsSold}장 판매)`
-      );
+      return interaction.reply(formatDrawResultMessage(result));
     } catch (err) {
       return interaction.reply({ content: err.message, ephemeral: true });
     }
+  }
+
+  if (sub === "채널설정") {
+    if (!isAdmin(interaction)) {
+      return interaction.reply({ content: "이 명령어는 서버 관리자만 사용할 수 있어요.", ephemeral: true });
+    }
+    const channel = interaction.options.getChannel("채널");
+    try {
+      await setAnnounceChannel(guildId, channel.id, interaction.client);
+    } catch (err) {
+      return interaction.reply({ content: err.message, ephemeral: true });
+    }
+    return interaction.reply({
+      content: `앞으로 이 라운드(그리고 자동으로 이어지는 다음 라운드들)의 추첨 알림은 ${channel}로 보냅니다.`,
+      ephemeral: true,
+    });
   }
 }
 
@@ -275,6 +278,12 @@ module.exports = {
         .addSubcommand((sub) => sub.setName("확인").setDescription("현재 라운드 상태를 봅니다."))
         .addSubcommand((sub) => sub.setName("뽑기").setDescription("지금 바로 추첨합니다 (자동 추첨을 기다리지 않고). (관리자 전용)"))
         .addSubcommand((sub) => sub.setName("종료").setDescription("추첨을 완전히 종료합니다 - 티켓은 환불됩니다. (관리자 전용)"))
+        .addSubcommand((sub) =>
+          sub
+            .setName("채널설정")
+            .setDescription("추첨 30분 전/10분 전 알림을 보낼 채널을 다시 지정합니다 (진행중인 라운드에도 바로 적용). (관리자 전용)")
+            .addChannelOption((opt) => opt.setName("채널").setDescription("알림을 보낼 텍스트 채널").addChannelTypes(ChannelType.GuildText).setRequired(true))
+        )
     ),
 
   async execute(interaction) {

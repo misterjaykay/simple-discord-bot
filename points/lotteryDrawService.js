@@ -209,6 +209,19 @@ async function buyTickets(guildId, user, count) {
   return lottery;
 }
 
+// Repoints the currently OPEN round's announcement channel without
+// restarting the cycle (a plain `종료` + `시작` would refund every ticket
+// bought so far and reset the jackpot chain, which is way more disruptive
+// than just fixing where the notices go). Re-arms the timers immediately so
+// any already-scheduled announce/reminder/result timers pick up the change.
+async function setAnnounceChannel(guildId, channelId, client) {
+  const lottery = await Lottery.findOneAndUpdate({ guildId, status: "OPEN" }, { announceChannelId: channelId }, { new: true });
+  if (!lottery) throw new Error("진행중인 추첨 라운드가 없습니다.");
+
+  if (client) scheduleWeeklyDraw(client, lottery);
+  return lottery;
+}
+
 function clearScheduledDraw(guildId) {
   const timer = scheduledDraws.get(guildId);
   if (timer) {
@@ -277,6 +290,18 @@ async function sendPreDrawReminder(guildId, client) {
   }
 }
 
+// Shared with the manual `/복권 추첨 뽑기` command handler (commands/points/lottery.js)
+// so the automatic weekly draw and a manually-forced one always read the same.
+function formatDrawResultMessage(result) {
+  if (result.outcome === "no_tickets") {
+    return `아무도 티켓을 사지 않아서 이번 회차는 취소되었고, 잭팟 ${result.pot.toLocaleString()} 포인트는 다음 라운드로 이월됩니다.`;
+  }
+  if (result.outcome === "rollover") {
+    return `😮 이번엔 당첨자가 나오지 않았어요! 판돈 ${result.pot.toLocaleString()} 포인트는 전부 다음 라운드로 이월됩니다.`;
+  }
+  return `🎉 <@${result.winnerId}> 님이 당첨되었습니다! 판돈 ${result.pot.toLocaleString()} 포인트 중 ${result.payout.toLocaleString()} 포인트를 받았습니다. (티켓 ${result.ticketsSold}장 판매)`;
+}
+
 function scheduleWeeklyDraw(client, lottery) {
   if (!lottery.drawAt) return;
 
@@ -284,11 +309,25 @@ function scheduleWeeklyDraw(client, lottery) {
   clearAllScheduledTimers(guildId);
 
   const drawTime = lottery.drawAt.getTime();
+  // Captured here (not re-read from the DB in the timer callback) so the
+  // result gets posted to the channel this specific round was configured
+  // for, even if a later round changes it.
+  const announceChannelId = lottery.announceChannelId;
 
   const drawDelay = Math.min(Math.max(drawTime - Date.now(), 0), MAX_TIMEOUT_MS);
   const drawTimer = setTimeout(() => {
     scheduledDraws.delete(guildId);
-    runDraw(guildId, client).catch((err) => console.error(`[lottery] scheduled draw failed for guild ${guildId}:`, err.message));
+    runDraw(guildId, client)
+      .then(async (result) => {
+        // The manual `/복권 추첨 뽑기` command posts its own reply - this is only
+        // for draws that fire on their own from the weekly timer, which
+        // previously announced nothing anywhere once resolved.
+        if (!announceChannelId) return;
+        const channel = await client.channels.fetch(announceChannelId).catch(() => null);
+        if (!channel) return;
+        await channel.send(formatDrawResultMessage(result)).catch((err) => console.error(`[lottery] result announcement failed:`, err.message));
+      })
+      .catch((err) => console.error(`[lottery] scheduled draw failed for guild ${guildId}:`, err.message));
   }, drawDelay);
   scheduledDraws.set(guildId, drawTimer);
 
@@ -402,7 +441,10 @@ async function runDraw(guildId, client) {
   lottery.resolvedAt = new Date();
   await lottery.save();
 
-  await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, 0, client, lottery.announceChannelId);
+  // Unlike a rollover (which carries the whole pot forward, seed included), a
+  // win pays the pot out and the next round starts from scratch - so it gets
+  // its own fresh SEED_JACKPOT baseline, same as a brand new `/복권 추첨 시작`.
+  await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, SEED_JACKPOT, client, lottery.announceChannelId);
 
   return { outcome: "win", winnerId: winner.userId, payout, pot, ticketsSold: tickets };
 }
@@ -446,11 +488,13 @@ module.exports = {
   startLottery,
   stopLottery,
   buyTickets,
+  setAnnounceChannel,
   runDraw,
   scheduleWeeklyDraw,
   clearScheduledDraw,
   rearmScheduledDraws,
   addJackpotContribution,
+  formatDrawResultMessage,
   getNextSaturdayNightET,
   totalTickets,
   totalPot,
