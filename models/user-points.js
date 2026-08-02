@@ -64,6 +64,16 @@ const userPointsSchema = new Schema({
   lotteryPlaysDate: {
     type: String,
   },
+  // /가위바위보 하루 세션 제한 - same reset convention as chatPointsDate/
+  // lotteryPlaysDate, but counts sessions (one /가위바위보 run, however many
+  // rounds it lasts) rather than individual rounds. See rps/rpsService.js.
+  rpsSessionsToday: {
+    type: Number,
+    default: 0,
+  },
+  rpsSessionsDate: {
+    type: String,
+  },
   // Manual moderation action (e.g. someone cursed in chat) that blocks a user
   // from placing new /예측 bets - never automated, always applied by a mod via
   // /예측제재. See prediction/predictionBanService.js.
