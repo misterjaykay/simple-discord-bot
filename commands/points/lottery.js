@@ -191,7 +191,7 @@ async function handleDraw(interaction, sub) {
       `🎟️ 추첨 복권을 시작했습니다! 티켓 1장 = ${DEFAULT_TICKET_PRICE.toLocaleString()} 포인트 (1인당 최대 ${maxTickets}장). ` +
         `기본 잭팟 ${SEED_JACKPOT.toLocaleString()} 포인트로 시작합니다. ` +
         `매주 토요일 밤 11:30(미국 동부시간)에 자동 추첨되며, 다음 추첨은 <t:${Math.floor(lottery.drawAt.getTime() / 1000)}:F>입니다. ` +
-        "`/복권 추첨 구매`로 참여하세요. 추첨 30분 전엔 이 채널에 공지, 10분 전엔 그때까지 티켓을 산 분들께 알림을 보내드려요."
+        "`/복권 추첨 구매`로 참여하세요. 추첨 30분 전엔 이 채널에 공지, 10분 전엔 그때까지 티켓을 산 분들께 알림, 추첨 직후엔 결과까지 이 채널로 보내드려요."
     );
   }
 
@@ -242,7 +242,7 @@ async function handleDraw(interaction, sub) {
       return interaction.reply({ content: err.message, ephemeral: true });
     }
     return interaction.reply({
-      content: `앞으로 이 라운드(그리고 자동으로 이어지는 다음 라운드들)의 추첨 알림은 ${channel}로 보냅니다.`,
+      content: `앞으로 이 라운드(그리고 자동으로 이어지는 다음 라운드들)의 30분 전 공지/10분 전 알림/추첨 결과를 전부 ${channel}로 보냅니다.`,
       ephemeral: true,
     });
   }
@@ -281,7 +281,7 @@ module.exports = {
         .addSubcommand((sub) =>
           sub
             .setName("채널설정")
-            .setDescription("추첨 30분 전/10분 전 알림을 보낼 채널을 다시 지정합니다 (진행중인 라운드에도 바로 적용). (관리자 전용)")
+            .setDescription("추첨 30분 전 공지/10분 전 알림/추첨 결과를 보낼 채널을 다시 지정합니다 (진행중인 라운드에도 바로 적용). (관리자 전용)")
             .addChannelOption((opt) => opt.setName("채널").setDescription("알림을 보낼 텍스트 채널").addChannelTypes(ChannelType.GuildText).setRequired(true))
         )
     ),

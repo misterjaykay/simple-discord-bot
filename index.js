@@ -9,6 +9,7 @@ const { handleVoiceStateUpdate } = require("./voicemaster/voiceStateHandler");
 const { handleVoicemasterComponent } = require("./voicemaster/componentHandler");
 const { handlePredictionComponent } = require("./prediction/componentHandler");
 const { handlePetComponent } = require("./pet/componentHandler");
+const { handleRpsComponent } = require("./rps/componentHandler");
 const { rearmScheduledLocks } = require("./prediction/predictionService");
 const { startVoicePointsInterval, rearmVoiceEventReverts } = require("./points/voicePointsService");
 const { rearmScheduledDraws } = require("./points/lotteryDrawService");
@@ -210,6 +211,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       } else if (interaction.customId?.startsWith("pet:")) {
         // /펫입양 다시뽑기/확정 buttons
         await handlePetComponent(interaction);
+      } else if (interaction.customId?.startsWith("rps:")) {
+        // /가위바위보 손 선택 + 계속하기/그만받기 buttons
+        await handleRpsComponent(interaction);
       }
     }
   } catch (error) {
