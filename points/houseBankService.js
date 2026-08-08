@@ -24,7 +24,7 @@ async function spendFromHouseBank(guildId, amount) {
   const updated = await GuildPointsConfig.findOneAndUpdate(
     { guildId, housePointsBank: { $gte: amount } },
     { $inc: { housePointsBank: -amount } },
-    { new: true }
+    { returnDocument: "after" }
   );
 
   if (!updated) {
