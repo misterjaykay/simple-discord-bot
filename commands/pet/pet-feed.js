@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { feedPet, FEED_COST } = require("../../pet/petService");
 
 function formatRemaining(ms) {
@@ -11,8 +11,7 @@ function formatRemaining(ms) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("펫밥주기")
-    .setDescription(`(테스트 중, 관리자 전용) 포인트 ${FEED_COST}를 써서 펫에게 밥을 줍니다.`)
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription(`포인트 ${FEED_COST}를 써서 펫에게 밥을 줍니다.`),
   async execute(interaction) {
     const result = await feedPet(interaction.guild.id, interaction.user);
 

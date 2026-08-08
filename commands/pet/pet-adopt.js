@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const { SlashCommandBuilder } = require("discord.js");
 const { checkAdoptEligibility, drawCandidate, ADOPT_COST, MAX_ADOPT_ATTEMPTS } = require("../../pet/petService");
 const { createSession, getSession } = require("../../pet/adoptSession");
 const { buildPreviewMessage, buildEligibilityFailureMessage } = require("../../pet/adoptView");
@@ -7,12 +7,8 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("펫입양")
     .setDescription(
-      `(테스트 중, 관리자 전용) 포인트 ${ADOPT_COST}로 펫을 입양합니다. 마음에 들 때까지 최대 ${MAX_ADOPT_ATTEMPTS}번 다시 뽑을 수 있어요.`
-    )
-    // Administrator hides the command from the slash command picker entirely
-    // for non-admins (not just a runtime block) - pet feature is still being
-    // tested, remove this line to open it up to everyone.
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+      `포인트 ${ADOPT_COST}로 펫을 입양합니다. 마음에 들 때까지 최대 ${MAX_ADOPT_ATTEMPTS}번 다시 뽑을 수 있어요.`
+    ),
   async execute(interaction) {
     const eligibility = await checkAdoptEligibility(interaction.guild.id, interaction.user);
     if (!eligibility.ok) {
