@@ -17,8 +17,11 @@ const MAX_ADOPT_ATTEMPTS = 10;
 const FEED_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2h - prevents refilling hunger nonstop
 const PLAY_COOLDOWN_MS = 60 * 60 * 1000; // 1h
 
-const FEED_EXP = 10;
-const PLAY_EXP = 15;
+// Both scale with level at the same ratio as EXP_PER_LEVEL_MULTIPLIER below,
+// so the actual pace (actions needed per level) never changes even though
+// the raw numbers shown to players grow - see that constant's comment.
+const FEED_EXP_MULTIPLIER = 15;
+const PLAY_EXP_MULTIPLIER = 25;
 
 // A full stat (100) decays to 0 over this many hours since the last feed/play.
 // Feeding/playing fully refills to 100 rather than adding a flat amount, so
@@ -32,8 +35,26 @@ function decayedStat(lastAt, decayHours) {
   return Math.max(0, Math.round(100 - (hoursElapsed / decayHours) * 100));
 }
 
+// Threshold AND reward both scale linearly with level (not flat) so the exp
+// pool visibly grows level over level like a normal game's would - but
+// because feed/play rewards grow at the exact same rate as the threshold,
+// the number of actions needed to clear any given level never changes. A
+// flat threshold (tried first) paced identically but looked static/odd to
+// players; this multiplier was picked by simulating against real feed/play
+// cadence so a dedicated player can level a new pet in realistic time once
+// multiple pets + PvP land, without leveling being trivial.
+const EXP_PER_LEVEL_MULTIPLIER = 40;
+
 function expForNextLevel(level) {
-  return level * 100;
+  return level * EXP_PER_LEVEL_MULTIPLIER;
+}
+
+function feedExpForLevel(level) {
+  return level * FEED_EXP_MULTIPLIER;
+}
+
+function playExpForLevel(level) {
+  return level * PLAY_EXP_MULTIPLIER;
 }
 
 // Mutates pet.exp/pet.level in place (caller still has to .save()). Handles
@@ -51,6 +72,15 @@ function applyExp(pet, amount) {
 
 async function getPet(guildId, userId) {
   return Pet.findOne({ guildId, userId });
+}
+
+// Deletes the user's pet outright (no partial refund of ADOPT_COST) so they
+// can adopt again - re-adopting pays ADOPT_COST again since checkAdoptEligibility
+// only blocks when a pet currently exists, which is the actual point sink
+// here rather than charging for the release itself. Returns the deleted pet
+// (for a "you gave up on Lv.N X" message) or null if they had none.
+async function releasePet(guildId, userId) {
+  return Pet.findOneAndDelete({ guildId, userId });
 }
 
 // Every action below returns a small { ok, reason?, ... } object instead of
@@ -87,7 +117,7 @@ async function confirmAdopt(guildId, user, candidate) {
 
   await addPoints(guildId, user, -ADOPT_COST);
 
-  const now = new Date();
+  const now = Date.now();
   const pet = await Pet.create({
     guildId,
     userId: user.id,
@@ -96,8 +126,13 @@ async function confirmAdopt(guildId, user, candidate) {
     spriteUrl: candidate.spriteUrl,
     nextEvolutionId: candidate.nextEvolution.speciesId,
     nextEvolutionMinLevel: candidate.nextEvolution.minLevel,
-    lastFedAt: now,
-    lastPlayedAt: now,
+    // Backdated by exactly one cooldown, not set to "now" - a fresh pet still
+    // shows ~full hunger/happiness (only a couple % off 100), but critically
+    // the cooldown has already "elapsed" so a new owner can feed/play with
+    // their pet right away instead of it being stuck on cooldown for the
+    // first 2h/1h as if it had just been fed/played at adoption time.
+    lastFedAt: new Date(now - FEED_COOLDOWN_MS),
+    lastPlayedAt: new Date(now - PLAY_COOLDOWN_MS),
   });
 
   return { ok: true, pet };
@@ -136,7 +171,7 @@ async function feedPet(guildId, user) {
 
   await addPoints(guildId, user, -FEED_COST);
   pet.lastFedAt = new Date();
-  const leveledUp = applyExp(pet, FEED_EXP);
+  const leveledUp = applyExp(pet, feedExpForLevel(pet.level));
   const evolvedTo = leveledUp ? await checkEvolution(pet) : null;
   await pet.save();
 
@@ -155,7 +190,7 @@ async function playWithPet(guildId, user) {
 
   await addPoints(guildId, user, -PLAY_COST);
   pet.lastPlayedAt = new Date();
-  const leveledUp = applyExp(pet, PLAY_EXP);
+  const leveledUp = applyExp(pet, playExpForLevel(pet.level));
   const evolvedTo = leveledUp ? await checkEvolution(pet) : null;
   await pet.save();
 
@@ -175,6 +210,7 @@ module.exports = {
   drawCandidate,
   confirmAdopt,
   getPet,
+  releasePet,
   feedPet,
   playWithPet,
   getDisplayStats,
