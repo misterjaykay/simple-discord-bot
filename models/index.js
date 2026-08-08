@@ -11,4 +11,7 @@ module.exports = {
   Lottery: require("./lottery"),
   LogConfig: require("./log-config"),
   MessageLogCache: require("./message-log-cache"),
+  Player: require("./player"),
+  Match: require("./match"),
+  PlayerMatchStat: require("./player-match-stat"),
 };

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { getPet, getDisplayStats } = require("../../pet/petService");
 
 function bar(value) {
@@ -9,8 +9,7 @@ function bar(value) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("펫정보")
-    .setDescription("(테스트 중, 관리자 전용) 내 펫의 상태를 확인합니다.")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription("내 펫의 상태를 확인합니다."),
   async execute(interaction) {
     const pet = await getPet(interaction.guild.id, interaction.user.id);
     if (!pet) {
