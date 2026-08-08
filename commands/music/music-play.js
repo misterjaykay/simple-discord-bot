@@ -45,7 +45,13 @@ module.exports = {
     }
 
     let connection = getVoiceConnection(interaction.guild.id);
+    // Only a connection THIS call created should ever be torn down on
+    // failure below - destroying one that was already there (e.g. a song
+    // already playing) would kick the bot out of voice over an unrelated
+    // new song failing to load.
+    let isNewConnection = false;
     if (!connection) {
+      isNewConnection = true;
       connection = joinVoiceChannel({
         channelId: voiceChannel.id,
         guildId: interaction.guild.id,
@@ -77,7 +83,7 @@ module.exports = {
       return interaction.editReply(`재생을 시작합니다: **${title}**`);
     } catch (err) {
       console.error(err);
-      connection.destroy();
+      if (isNewConnection) connection.destroy();
       return interaction.editReply("음악을 재생하는 중 오류가 발생했습니다.");
     }
   },

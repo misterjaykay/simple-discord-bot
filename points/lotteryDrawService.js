@@ -215,7 +215,11 @@ async function buyTickets(guildId, user, count) {
 // than just fixing where the notices go). Re-arms the timers immediately so
 // any already-scheduled announce/reminder/result timers pick up the change.
 async function setAnnounceChannel(guildId, channelId, client) {
-  const lottery = await Lottery.findOneAndUpdate({ guildId, status: "OPEN" }, { announceChannelId: channelId }, { new: true });
+  const lottery = await Lottery.findOneAndUpdate(
+    { guildId, status: "OPEN" },
+    { announceChannelId: channelId },
+    { returnDocument: "after" }
+  );
   if (!lottery) throw new Error("진행중인 추첨 라운드가 없습니다.");
 
   if (client) scheduleWeeklyDraw(client, lottery);
