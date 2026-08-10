@@ -1,4 +1,6 @@
 const { getOrCreatePoints, addPoints, todayString } = require("../points/pointsService");
+const { addToHouseBank } = require("../points/houseBankService");
+const { addJackpotContribution } = require("../points/lotteryDrawService");
 const { createSession, getSession, recordWin, deleteSession } = require("./rpsSession");
 
 // Costs a flat entry fee to start; a loss forfeits it (and anything banked
@@ -7,6 +9,13 @@ const { createSession, getSession, recordWin, deleteSession } = require("./rpsSe
 // ×1.5 multiplier being below the "fair" ×2 (at true 50/50 odds, continuing
 // past any win is a slightly -EV bet), not from rigging the hand draw.
 const ENTRY_FEE = 20;
+// Rather than just vanishing, every entry fee is split evenly between the two
+// existing point sinks (same real money either way, just redirected instead
+// of destroyed) - half tops up the house bank (/포인트관리 하우스지급's funding
+// source), half feeds the draw-style lottery's jackpot, same as instant
+// lottery losses already do via addJackpotContribution.
+const ENTRY_FEE_HOUSE_SHARE = ENTRY_FEE / 2;
+const ENTRY_FEE_JACKPOT_SHARE = ENTRY_FEE - ENTRY_FEE_HOUSE_SHARE;
 const BASE_WIN = 30;
 const MULTIPLIER = 1.5;
 const MAX_STREAK = 6;
@@ -55,6 +64,9 @@ async function startSession(guildId, user) {
   record.rpsSessionsToday += 1;
   record.username = user.username ?? record.username;
   await record.save();
+
+  await addToHouseBank(guildId, ENTRY_FEE_HOUSE_SHARE);
+  await addJackpotContribution(guildId, ENTRY_FEE_JACKPOT_SHARE);
 
   const sessionId = createSession(guildId, user.id);
   return { sessionId, sessionsLeft: DAILY_SESSION_LIMIT - record.rpsSessionsToday };
@@ -119,6 +131,8 @@ module.exports = {
   getSession,
   resolveHands,
   ENTRY_FEE,
+  ENTRY_FEE_HOUSE_SHARE,
+  ENTRY_FEE_JACKPOT_SHARE,
   BASE_WIN,
   MULTIPLIER,
   MAX_STREAK,

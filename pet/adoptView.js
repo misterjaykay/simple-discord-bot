@@ -34,6 +34,17 @@ function buildAdoptedMessage(pet) {
   return { embeds: [embed], components: [] };
 }
 
+// Posted to the channel (not ephemeral) once adoption is actually finalized -
+// the picker/reroll process itself stays private, only the end result is public.
+function buildPublicAdoptedMessage(user, pet) {
+  const embed = new EmbedBuilder()
+    .setTitle(`🎉 ${user.username}님이 ${pet.speciesName}를(을) 입양했어요!`)
+    .setImage(pet.spriteUrl)
+    .setColor(0xffcb05);
+
+  return { embeds: [embed] };
+}
+
 function buildExpiredMessage() {
   return { content: "선택 시간이 만료됐어요. `/펫입양`을 다시 실행해주세요.", embeds: [], components: [] };
 }
@@ -45,4 +56,4 @@ function buildEligibilityFailureMessage(reason) {
   return { content: "포인트가 부족해서 확정할 수 없어요.", embeds: [], components: [] };
 }
 
-module.exports = { buildPreviewMessage, buildAdoptedMessage, buildExpiredMessage, buildEligibilityFailureMessage };
+module.exports = { buildPreviewMessage, buildAdoptedMessage, buildPublicAdoptedMessage, buildExpiredMessage, buildEligibilityFailureMessage };

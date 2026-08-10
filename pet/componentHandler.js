@@ -1,6 +1,12 @@
 const { getSession, updateCandidate, deleteSession } = require("./adoptSession");
 const { drawCandidate, confirmAdopt, releasePet, MAX_ADOPT_ATTEMPTS } = require("./petService");
-const { buildPreviewMessage, buildAdoptedMessage, buildExpiredMessage, buildEligibilityFailureMessage } = require("./adoptView");
+const {
+  buildPreviewMessage,
+  buildAdoptedMessage,
+  buildPublicAdoptedMessage,
+  buildExpiredMessage,
+  buildEligibilityFailureMessage,
+} = require("./adoptView");
 const { buildReleasedMessage, buildReleaseCancelledMessage, buildNoPetToReleaseMessage } = require("./releaseView");
 
 async function handlePetComponent(interaction) {
@@ -65,7 +71,11 @@ async function handlePetComponent(interaction) {
       if (!result.ok) {
         return interaction.editReply(buildEligibilityFailureMessage(result.reason));
       }
-      return interaction.editReply(buildAdoptedMessage(result.pet));
+      await interaction.editReply(buildAdoptedMessage(result.pet));
+      await interaction.channel
+        .send(buildPublicAdoptedMessage(interaction.user, result.pet))
+        .catch((err) => console.error("[pet] public adopt announcement failed:", err.message));
+      return;
     }
 
     return interaction.editReply(buildPreviewMessage(sessionId, updated));
@@ -79,7 +89,11 @@ async function handlePetComponent(interaction) {
       return interaction.update(buildEligibilityFailureMessage(result.reason));
     }
 
-    return interaction.update(buildAdoptedMessage(result.pet));
+    await interaction.update(buildAdoptedMessage(result.pet));
+    await interaction.channel
+      .send(buildPublicAdoptedMessage(interaction.user, result.pet))
+      .catch((err) => console.error("[pet] public adopt announcement failed:", err.message));
+    return;
   }
 }
 

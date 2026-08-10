@@ -15,7 +15,13 @@ module.exports = {
       return interaction.reply({ ...buildEligibilityFailureMessage(eligibility.reason), ephemeral: true });
     }
 
-    await interaction.deferReply();
+    // Ephemeral - the whole preview/reroll picker is private to the adopter.
+    // Anyone else could technically see a public message's buttons and click
+    // them (componentHandler.js already rejects non-owners), but keeping it
+    // private avoids that confusion entirely. The pet only gets announced
+    // publicly once adoption is actually finalized (confirm or the forced
+    // 10th-reroll auto-confirm) - see pet/componentHandler.js.
+    await interaction.deferReply({ ephemeral: true });
 
     let candidate;
     try {
