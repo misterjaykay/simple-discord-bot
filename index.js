@@ -13,6 +13,7 @@ const { handleRpsComponent } = require("./rps/componentHandler");
 const { rearmScheduledLocks } = require("./prediction/predictionService");
 const { startVoicePointsInterval, rearmVoiceEventReverts } = require("./points/voicePointsService");
 const { rearmScheduledDraws } = require("./points/lotteryDrawService");
+const { rearmScheduledTournaments } = require("./pet/tournamentService");
 const { awardChatPoints } = require("./points/chatPointsService");
 const { startBirthdayCheckInterval } = require("./birthday/birthdayPointsService");
 const { handleWordleResultsMessage } = require("./wordle/wordlePointsService");
@@ -124,6 +125,9 @@ client.once(Events.ClientReady, (c) => {
     // Re-arm any pending weekly /복권 추첨 draws (see commands/lottery.js) that
     // were scheduled when the process last stopped.
     rearmScheduledDraws(c).catch((err) => console.error("[lottery] rearm failed:", err));
+    // Re-arm any pending weekly /펫대전 tournament runs (see pet/tournamentService.js)
+    // that were scheduled when the process last stopped.
+    rearmScheduledTournaments(c).catch((err) => console.error("[pet-tournament] rearm failed:", err));
 
     // Logging: warm the message-log guild set (see logging/logConfigService.js)
     // and the member cache (join-leave-log needs every member's joinedAt to

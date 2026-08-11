@@ -25,11 +25,12 @@ module.exports = {
       .setTitle(pet.nickname ?? pet.speciesName)
       .setImage(pet.spriteUrl)
       .addFields(
-        { name: "종", value: pet.speciesName, inline: true },
+        { name: "포켓몬", value: pet.speciesName, inline: true },
         { name: "레벨", value: `Lv.${pet.level} (${pet.exp}/${stats.expNeeded} exp)`, inline: true },
         { name: "배고픔", value: `${bar(stats.hunger)} ${stats.hunger}%` },
         { name: "친밀도", value: `${bar(stats.happiness)} ${stats.happiness}%` },
-        { name: "진화", value: evolutionText }
+        { name: "진화", value: evolutionText },
+        { name: "토너먼트 전적", value: `🏆 우승 ${pet.tournamentWins}회 / 🥈 준우승 ${pet.tournamentRunnerUps}회` }
       )
       .setColor(0xffcb05);
 

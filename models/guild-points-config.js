@@ -36,6 +36,13 @@ const guildPointsConfigSchema = new Schema({
     type: Number,
     default: 0,
   },
+  // Fixed channel admins designate for weekly /펫대전 bracket results (see
+  // commands/pet/pet-tournament.js '채널설정' and pet/tournamentService.js).
+  // Unlike the lottery's per-round announceChannelId, this persists across
+  // every weekly cycle until an admin changes it.
+  petTournamentChannelId: {
+    type: String,
+  },
 });
 
 module.exports = mongoose.model("GuildPointsConfig", guildPointsConfigSchema);

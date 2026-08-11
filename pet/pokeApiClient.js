@@ -24,9 +24,19 @@ const RARE_EVOLUTION_LEVEL = 20;
 // get discarded and re-rolled (see getRandomEvolvableBaseSpecies).
 const RARE_ACCEPT_PROBABILITY = 0.15;
 
-const speciesCache = new Map(); // id -> { id, displayName, spriteUrl } (display data)
+const speciesCache = new Map(); // id -> { id, displayName, spriteUrl, types, baseAttack, baseDefense } (display + battle data)
 const rawSpeciesCache = new Map(); // id -> raw /pokemon-species/{id} response
 const chainCache = new Map(); // chainId -> raw /evolution-chain/{id} response
+const typeRelationsCache = new Map(); // type slug -> raw damage_relations
+
+// Korean display names for the 18 canonical PokeAPI types - fixed set, cheaper
+// to hardcode than round-trip /type/{name}?language=ko just for a label.
+const TYPE_NAME_KO = {
+  normal: "노말", fire: "불꽃", water: "물", electric: "전기", grass: "풀",
+  ice: "얼음", fighting: "격투", poison: "독", ground: "땅", flying: "비행",
+  psychic: "에스퍼", bug: "벌레", rock: "바위", ghost: "고스트", dragon: "드래곤",
+  dark: "악", steel: "강철", fairy: "페어리",
+};
 
 function pickKoreanName(names, fallback) {
   const match = names?.find((n) => n.language?.name === "ko");
@@ -52,10 +62,41 @@ async function fetchSpecies(id) {
   const displayName = pickKoreanName(speciesRes.data.names, englishName);
   const spriteUrl =
     pokemonRes.data.sprites?.other?.["official-artwork"]?.front_default ?? pokemonRes.data.sprites?.front_default;
+  const types = pokemonRes.data.types.map((t) => t.type.name);
+  const baseAttack = pokemonRes.data.stats.find((s) => s.stat.name === "attack")?.base_stat ?? 50;
+  const baseDefense = pokemonRes.data.stats.find((s) => s.stat.name === "defense")?.base_stat ?? 50;
 
-  const data = { id, displayName, spriteUrl };
+  const data = { id, displayName, spriteUrl, types, baseAttack, baseDefense };
   speciesCache.set(id, data);
   return data;
+}
+
+// Fetches (and caches) a type's damage relations from PokeAPI. Only 18 types
+// exist, so this cache is fully warm after a handful of battles.
+async function getTypeRelations(typeName) {
+  if (typeRelationsCache.has(typeName)) return typeRelationsCache.get(typeName);
+  const res = await axios.get(`https://pokeapi.co/api/v2/type/${typeName}`);
+  const relations = res.data.damage_relations;
+  typeRelationsCache.set(typeName, relations);
+  return relations;
+}
+
+// Combined multiplier for an attacker's type(s) against a defender's type(s).
+// Clamped to [0.5, 2.0] - this is a battle-flavor bonus on top of a level/stat
+// formula, not a full Pokemon damage engine, so we deliberately don't let it
+// swing as wildly as the real 4x/0.25x extremes.
+async function getTypeEffectivenessMultiplier(attackerTypes, defenderTypes) {
+  let multiplier = 1;
+  for (const attackerType of attackerTypes) {
+    const relations = await getTypeRelations(attackerType).catch(() => null);
+    if (!relations) continue;
+    for (const defenderType of defenderTypes) {
+      if (relations.double_damage_to?.some((t) => t.name === defenderType)) multiplier *= 1.5;
+      else if (relations.half_damage_to?.some((t) => t.name === defenderType)) multiplier *= 0.7;
+      else if (relations.no_damage_to?.some((t) => t.name === defenderType)) multiplier *= 0.5;
+    }
+  }
+  return Math.min(2.0, Math.max(0.5, multiplier));
 }
 
 async function getRawSpecies(id) {
@@ -170,4 +211,10 @@ async function getSpeciesById(id) {
   return fetchSpecies(id);
 }
 
-module.exports = { getRandomEvolvableBaseSpecies, getSpeciesById, getFollowingEvolution };
+module.exports = {
+  getRandomEvolvableBaseSpecies,
+  getSpeciesById,
+  getFollowingEvolution,
+  getTypeEffectivenessMultiplier,
+  TYPE_NAME_KO,
+};
