@@ -10,6 +10,7 @@ const { handleVoicemasterComponent } = require("./voicemaster/componentHandler")
 const { handlePredictionComponent } = require("./prediction/componentHandler");
 const { handlePetComponent } = require("./pet/componentHandler");
 const { handleRpsComponent } = require("./rps/componentHandler");
+const { handleBambooComponent } = require("./bamboo/componentHandler");
 const { rearmScheduledLocks } = require("./prediction/predictionService");
 const { startVoicePointsInterval, rearmVoiceEventReverts } = require("./points/voicePointsService");
 const { rearmScheduledDraws } = require("./points/lotteryDrawService");
@@ -218,6 +219,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       } else if (interaction.customId?.startsWith("rps:")) {
         // /가위바위보 손 선택 + 계속하기/그만받기 buttons
         await handleRpsComponent(interaction);
+      } else if (interaction.customId?.startsWith("bamboo:")) {
+        // /대나무숲 submission modals
+        await handleBambooComponent(interaction);
       }
     }
   } catch (error) {
