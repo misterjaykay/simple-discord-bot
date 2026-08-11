@@ -15,4 +15,6 @@ module.exports = {
   Player: require("./player"),
   Match: require("./match"),
   PlayerMatchStat: require("./player-match-stat"),
+  BambooPost: require("./bamboo-post"),
+  BambooConfig: require("./bamboo-config"),
 };
