@@ -43,6 +43,27 @@ const petSchema = new Schema({
   nextEvolutionMinLevel: {
     type: Number,
   },
+  // Battle stats - populated at adopt time (see petService.confirmAdopt). Pets
+  // adopted before /펫대전 existed have these unset until battleService.ensureBattleStats
+  // lazily backfills them right before their first tournament match.
+  types: {
+    type: [String],
+    default: [],
+  },
+  baseAttack: {
+    type: Number,
+  },
+  baseDefense: {
+    type: Number,
+  },
+  tournamentWins: {
+    type: Number,
+    default: 0,
+  },
+  tournamentRunnerUps: {
+    type: Number,
+    default: 0,
+  },
   // hunger/happiness aren't stored as live numbers - they're derived from
   // lastFedAt/lastPlayedAt on read (see petService.getDisplayStats), so a
   // pet's stats keep decaying correctly even if nobody checks in for days.

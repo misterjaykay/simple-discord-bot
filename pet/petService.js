@@ -124,6 +124,9 @@ async function confirmAdopt(guildId, user, candidate) {
     speciesId: candidate.id,
     speciesName: candidate.displayName,
     spriteUrl: candidate.spriteUrl,
+    types: candidate.types,
+    baseAttack: candidate.baseAttack,
+    baseDefense: candidate.baseDefense,
     nextEvolutionId: candidate.nextEvolution.speciesId,
     nextEvolutionMinLevel: candidate.nextEvolution.minLevel,
     // Backdated by exactly one cooldown, not set to "now" - a fresh pet still
@@ -153,6 +156,9 @@ async function checkEvolution(pet) {
   pet.speciesId = pet.nextEvolutionId;
   pet.speciesName = newSpecies.displayName;
   pet.spriteUrl = newSpecies.spriteUrl;
+  pet.types = newSpecies.types;
+  pet.baseAttack = newSpecies.baseAttack;
+  pet.baseDefense = newSpecies.baseDefense;
   pet.nextEvolutionId = newNextEvolution?.speciesId ?? null;
   pet.nextEvolutionMinLevel = newNextEvolution?.minLevel ?? null;
 
