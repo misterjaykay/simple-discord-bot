@@ -37,6 +37,21 @@ async function handleStart(interaction) {
   }
   scheduleWeeklyTournament(interaction.client, tournament);
 
+  // Announce in the target channel itself too, not just the admin's reply
+  // wherever they happened to run the command - skipped when they're the
+  // same channel so people don't see the exact same message twice.
+  if (channelOption && channelOption.id !== interaction.channelId) {
+    try {
+      const targetChannel = await interaction.client.channels.fetch(channelOption.id);
+      await targetChannel.send(
+        `🏆 이제부터 이 채널에 매주 펫 토너먼트 결과가 공지됩니다! 참가비 ${ENTRY_FEE.toLocaleString()} 포인트, ` +
+          `\`/펫대전 신청\`으로 참가하세요. 다음 진행: <t:${Math.floor(tournament.runAt.getTime() / 1000)}:F>`
+      );
+    } catch (err) {
+      console.error("[pet-tournament] channel setup announcement failed:", err.message);
+    }
+  }
+
   const config = channelOption ? { petTournamentChannelId: channelOption.id } : await GuildPointsConfig.findOne({ guildId: interaction.guild.id });
   const channelNote = config?.petTournamentChannelId
     ? `결과는 <#${config.petTournamentChannelId}>에 공지됩니다.`
