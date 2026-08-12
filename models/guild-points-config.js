@@ -49,6 +49,14 @@ const guildPointsConfigSchema = new Schema({
   petChannelId: {
     type: String,
   },
+  // Half of every /펫밥주기·/펫놀아주기 cost lands here instead of vanishing
+  // (the other half goes to housePointsBank) - swept into the weekly
+  // /펫대전 prize pool at settlement, replacing the old flat per-participant
+  // bonus. See points/petTournamentBonusBankService.js.
+  petTournamentBonusBank: {
+    type: Number,
+    default: 0,
+  },
 });
 
 module.exports = mongoose.model("GuildPointsConfig", guildPointsConfigSchema);

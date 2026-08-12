@@ -1,27 +1,47 @@
 const Pet = require("../models/pet");
-const { getOrCreatePoints, addPoints } = require("../points/pointsService");
+const { getOrCreatePoints, addPoints, todayString } = require("../points/pointsService");
 const { getRandomEvolvableBaseSpecies, getSpeciesById, getFollowingEvolution } = require("./pokeApiClient");
+const { addToHouseBank } = require("../points/houseBankService");
+const { addToPetTournamentBonusBank } = require("../points/petTournamentBonusBankService");
 
 // Points economy note: chatPointsService/voicePointsService only ever pay
 // points IN - /예측 betting was the only sink so far. These costs give people
 // another reason to spend the points they've been earning.
 const ADOPT_COST = 300;
-const FEED_COST = 20;
-const PLAY_COST = 15;
+const FEED_COST = 40;
+const PLAY_COST = 30;
+
+// Half of every feed/play cost funds the weekly /펫대전 prize pool, the other
+// half goes to the shared house bank - neither just vanishes anymore (see
+// points/petTournamentBonusBankService.js and points/houseBankService.js).
+async function routeActionCost(guildId, cost) {
+  const toBonus = Math.round(cost * 0.5);
+  const toHouse = cost - toBonus;
+  await Promise.all([addToPetTournamentBonusBank(guildId, toBonus), addToHouseBank(guildId, toHouse)]);
+}
 
 // "10번의 기회" - mobile-gacha-style reroll allowance. Cost is paid once at
 // final confirmation, not per draw, so rerolling is free as long as you
 // haven't used up all 10 attempts (see pet/adoptSession.js + commands/pet-adopt.js).
 const MAX_ADOPT_ATTEMPTS = 10;
 
-const FEED_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2h - prevents refilling hunger nonstop
-const PLAY_COOLDOWN_MS = 60 * 60 * 1000; // 1h
+const FEED_COOLDOWN_MS = 2.5 * 60 * 60 * 1000; // 2h30m - prevents refilling hunger nonstop
+const PLAY_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2h
+
+// Daily caps on top of the cooldowns above - without these, someone who never
+// sleeps could still level far ahead of everyone else just by never missing a
+// cooldown window. See the "다같이 천천히" design discussion this was tuned for.
+const MAX_FEEDS_PER_DAY = 6;
+const MAX_PLAYS_PER_DAY = 6;
 
 // Both scale with level at the same ratio as EXP_PER_LEVEL_MULTIPLIER below,
 // so the actual pace (actions needed per level) never changes even though
 // the raw numbers shown to players grow - see that constant's comment.
-const FEED_EXP_MULTIPLIER = 15;
-const PLAY_EXP_MULTIPLIER = 25;
+// Feed costs more than play (FEED_COST/PLAY_COST) and now pays out more exp
+// per point too - previously play was strictly better value (cheaper AND more
+// exp), which made feeding a pet feel like a chore you only did for hunger.
+const FEED_EXP_MULTIPLIER = 25;
+const PLAY_EXP_MULTIPLIER = 15;
 
 // A full stat (100) decays to 0 over this many hours since the last feed/play.
 // Feeding/playing fully refills to 100 rather than adding a flat amount, so
@@ -165,6 +185,18 @@ async function checkEvolution(pet) {
   return { from: fromName, to: pet.speciesName };
 }
 
+// How many times today (todayString()'s noon-ET day) this pet has already
+// used the given action - 0 if the stored date doesn't match today, i.e. the
+// count implicitly resets the first time the action is used on a new day.
+function dailyCountSoFar(pet, countField, dateField) {
+  return pet[dateField] === todayString() ? pet[countField] : 0;
+}
+
+function recordDailyAction(pet, countField, dateField) {
+  pet[countField] = dailyCountSoFar(pet, countField, dateField) + 1;
+  pet[dateField] = todayString();
+}
+
 async function feedPet(guildId, user) {
   const pet = await getPet(guildId, user.id);
   if (!pet) return { ok: false, reason: "no-pet" };
@@ -172,11 +204,17 @@ async function feedPet(guildId, user) {
   const remainingMs = pet.lastFedAt ? FEED_COOLDOWN_MS - (Date.now() - pet.lastFedAt.getTime()) : 0;
   if (remainingMs > 0) return { ok: false, reason: "cooldown", remainingMs };
 
+  if (dailyCountSoFar(pet, "feedsToday", "feedsTodayDate") >= MAX_FEEDS_PER_DAY) {
+    return { ok: false, reason: "daily-limit" };
+  }
+
   const balance = await getOrCreatePoints(guildId, user);
   if (balance.points < FEED_COST) return { ok: false, reason: "not-enough-points" };
 
   await addPoints(guildId, user, -FEED_COST);
+  await routeActionCost(guildId, FEED_COST);
   pet.lastFedAt = new Date();
+  recordDailyAction(pet, "feedsToday", "feedsTodayDate");
   const leveledUp = applyExp(pet, feedExpForLevel(pet.level));
   const evolvedTo = leveledUp ? await checkEvolution(pet) : null;
   await pet.save();
@@ -191,11 +229,17 @@ async function playWithPet(guildId, user) {
   const remainingMs = pet.lastPlayedAt ? PLAY_COOLDOWN_MS - (Date.now() - pet.lastPlayedAt.getTime()) : 0;
   if (remainingMs > 0) return { ok: false, reason: "cooldown", remainingMs };
 
+  if (dailyCountSoFar(pet, "playsToday", "playsTodayDate") >= MAX_PLAYS_PER_DAY) {
+    return { ok: false, reason: "daily-limit" };
+  }
+
   const balance = await getOrCreatePoints(guildId, user);
   if (balance.points < PLAY_COST) return { ok: false, reason: "not-enough-points" };
 
   await addPoints(guildId, user, -PLAY_COST);
+  await routeActionCost(guildId, PLAY_COST);
   pet.lastPlayedAt = new Date();
+  recordDailyAction(pet, "playsToday", "playsTodayDate");
   const leveledUp = applyExp(pet, playExpForLevel(pet.level));
   const evolvedTo = leveledUp ? await checkEvolution(pet) : null;
   await pet.save();
@@ -225,5 +269,7 @@ module.exports = {
   PLAY_COST,
   FEED_COOLDOWN_MS,
   PLAY_COOLDOWN_MS,
+  MAX_FEEDS_PER_DAY,
+  MAX_PLAYS_PER_DAY,
   MAX_ADOPT_ATTEMPTS,
 };

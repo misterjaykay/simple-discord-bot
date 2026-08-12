@@ -73,6 +73,23 @@ const petSchema = new Schema({
   lastPlayedAt: {
     type: Date,
   },
+  // Daily action caps (see petService feedPet/playWithPet) - reset whenever
+  // todayString() (points/pointsService.js, noon-ET day boundary) no longer
+  // matches the stored date, same pattern as UserPoints.chatPointsToday.
+  feedsToday: {
+    type: Number,
+    default: 0,
+  },
+  feedsTodayDate: {
+    type: String,
+  },
+  playsToday: {
+    type: Number,
+    default: 0,
+  },
+  playsTodayDate: {
+    type: String,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
