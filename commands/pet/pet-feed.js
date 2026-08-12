@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { feedPet, FEED_COST } = require("../../pet/petService");
+const { requirePetChannel } = require("../../pet/petChannelGuard");
 
 function formatRemaining(ms) {
   const totalMinutes = Math.ceil(ms / 60000);
@@ -13,6 +14,8 @@ module.exports = {
     .setName("펫밥주기")
     .setDescription(`포인트 ${FEED_COST}를 써서 펫에게 밥을 줍니다.`),
   async execute(interaction) {
+    if (!(await requirePetChannel(interaction))) return;
+
     const result = await feedPet(interaction.guild.id, interaction.user);
 
     if (!result.ok) {

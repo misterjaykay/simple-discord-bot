@@ -43,6 +43,12 @@ const guildPointsConfigSchema = new Schema({
   petTournamentChannelId: {
     type: String,
   },
+  // Optional restriction (see /펫채널설정 and pet/petChannelGuard.js) so every
+  // pet command (입양/정보/밥주기/놀아주기/이름변경/파양/대전) only works in one
+  // designated channel. Absent = unrestricted, same as before this existed.
+  petChannelId: {
+    type: String,
+  },
 });
 
 module.exports = mongoose.model("GuildPointsConfig", guildPointsConfigSchema);

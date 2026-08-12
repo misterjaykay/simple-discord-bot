@@ -10,6 +10,7 @@ const {
   BONUS_PER_PARTICIPANT,
   MIN_PARTICIPANTS,
 } = require("../../pet/tournamentService");
+const { requirePetChannel } = require("../../pet/petChannelGuard");
 
 function isAdmin(interaction) {
   return interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ?? false;
@@ -21,14 +22,10 @@ async function handleStart(interaction) {
   }
 
   const channelOption = interaction.options.getChannel("채널");
-  if (channelOption) {
-    await GuildPointsConfig.findOneAndUpdate(
-      { guildId: interaction.guild.id },
-      { petTournamentChannelId: channelOption.id },
-      { upsert: true }
-    );
-  }
 
+  // Attempted BEFORE writing the channel option to GuildPointsConfig - if the
+  // cycle is already running (most likely failure), nothing should change as
+  // a side effect of a command that otherwise reports failure.
   let tournament;
   try {
     tournament = await startWeeklyTournament(interaction.guild.id, interaction.user.id);
@@ -36,6 +33,14 @@ async function handleStart(interaction) {
     return interaction.reply({ content: err.message, ephemeral: true });
   }
   scheduleWeeklyTournament(interaction.client, tournament);
+
+  if (channelOption) {
+    await GuildPointsConfig.findOneAndUpdate(
+      { guildId: interaction.guild.id },
+      { petTournamentChannelId: channelOption.id },
+      { upsert: true }
+    );
+  }
 
   // Announce in the target channel itself too, not just the admin's reply
   // wherever they happened to run the command - skipped when they're the
@@ -156,9 +161,16 @@ module.exports = {
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
+
+    // 시작/종료/채널설정 are admin setup - deliberately NOT gated by
+    // requirePetChannel, since an admin needs to be able to bootstrap the
+    // restriction (and run it from an admin-only channel) before a pet
+    // channel is even configured. 신청/확인 are what regular players use.
     if (sub === "시작") return handleStart(interaction);
     if (sub === "종료") return handleStop(interaction);
     if (sub === "채널설정") return handleChannelSet(interaction);
+
+    if (!(await requirePetChannel(interaction))) return;
     if (sub === "신청") return handleRegister(interaction);
     if (sub === "확인") return handleStatus(interaction);
   },

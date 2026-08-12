@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { getPet } = require("../../pet/petService");
+const { requirePetChannel } = require("../../pet/petChannelGuard");
 
 const MAX_NICKNAME_LENGTH = 20;
 
@@ -11,6 +12,8 @@ module.exports = {
       opt.setName("이름").setDescription(`새 이름 (최대 ${MAX_NICKNAME_LENGTH}자)`).setMaxLength(MAX_NICKNAME_LENGTH).setRequired(true)
     ),
   async execute(interaction) {
+    if (!(await requirePetChannel(interaction))) return;
+
     const pet = await getPet(interaction.guild.id, interaction.user.id);
     if (!pet) {
       return interaction.reply({ content: "아직 펫이 없어요. `/펫입양`으로 먼저 입양해보세요!", ephemeral: true });
