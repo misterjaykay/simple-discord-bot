@@ -2,6 +2,7 @@ const { SlashCommandBuilder } = require("discord.js");
 const { checkAdoptEligibility, drawCandidate, ADOPT_COST, MAX_ADOPT_ATTEMPTS } = require("../../pet/petService");
 const { createSession, getSession } = require("../../pet/adoptSession");
 const { buildPreviewMessage, buildEligibilityFailureMessage } = require("../../pet/adoptView");
+const { requirePetChannel } = require("../../pet/petChannelGuard");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -10,6 +11,8 @@ module.exports = {
       `포인트 ${ADOPT_COST}로 펫을 입양합니다. 마음에 들 때까지 최대 ${MAX_ADOPT_ATTEMPTS}번 다시 뽑을 수 있어요.`
     ),
   async execute(interaction) {
+    if (!(await requirePetChannel(interaction))) return;
+
     const eligibility = await checkAdoptEligibility(interaction.guild.id, interaction.user);
     if (!eligibility.ok) {
       return interaction.reply({ ...buildEligibilityFailureMessage(eligibility.reason), ephemeral: true });

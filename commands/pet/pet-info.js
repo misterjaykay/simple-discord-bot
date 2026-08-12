@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { getPet, getDisplayStats } = require("../../pet/petService");
+const { requirePetChannel } = require("../../pet/petChannelGuard");
 
 function bar(value) {
   const filled = Math.round(value / 10);
@@ -11,6 +12,8 @@ module.exports = {
     .setName("펫정보")
     .setDescription("내 펫의 상태를 확인합니다."),
   async execute(interaction) {
+    if (!(await requirePetChannel(interaction))) return;
+
     const pet = await getPet(interaction.guild.id, interaction.user.id);
     if (!pet) {
       return interaction.reply({ content: "아직 펫이 없어요. `/펫입양`으로 입양해보세요!", ephemeral: true });

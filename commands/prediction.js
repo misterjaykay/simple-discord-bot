@@ -4,6 +4,11 @@ const { addPoints } = require("../points/pointsService");
 const { buildPredictionMessage, refreshPredictionMessage } = require("../prediction/predictionView");
 const { lockPrediction, scheduleAutoLock, clearScheduledLock } = require("../prediction/predictionService");
 
+// If an admin doesn't set 시간/초 at all, the prediction still needs to lock
+// itself eventually rather than sitting open until someone remembers
+// /예측 마감 - 5 minutes felt like a reasonable "quick poll" default.
+const DEFAULT_LOCK_DURATION_MS = 5 * 60 * 1000;
+
 // Test-run lockdown: require actual Administrator (owner or an Administrator
 // role), not just "Manage Server" - so nobody can spam-create/lock/settle
 // predictions while this is still being tried out. Once there's a dedicated
@@ -34,18 +39,10 @@ module.exports = {
         .addStringOption((opt) => opt.setName("옵션4").setDescription("네 번째 옵션 (선택)").setRequired(false))
         .addIntegerOption((opt) =>
           opt
-            .setName("시간")
-            .setDescription("몇 분 후 자동으로 마감할지 (초와 함께 쓸 수 있음, 비워두면 /예측 마감 으로 직접 마감)")
-            .setMinValue(0)
-            .setMaxValue(10080)
-            .setRequired(false)
-        )
-        .addIntegerOption((opt) =>
-          opt
             .setName("초")
-            .setDescription("긴박한 예측용 - 몇 초 후 마감할지 (시간과 더해짐, 예: 시간:0 초:30 = 30초 후 마감)")
+            .setDescription("몇 초 후 자동으로 마감할지 (예: 300 = 5분. 비워두면 5분 후 자동 마감)")
             .setMinValue(0)
-            .setMaxValue(59)
+            .setMaxValue(604800)
             .setRequired(false)
         )
         .addChannelOption((opt) =>
@@ -96,9 +93,10 @@ module.exports = {
 
       const question = interaction.options.getString("질문");
       const options = ["옵션1", "옵션2", "옵션3", "옵션4"].map((key) => interaction.options.getString(key)).filter(Boolean);
-      const minutes = interaction.options.getInteger("시간") ?? 0;
-      const seconds = interaction.options.getInteger("초") ?? 0;
-      const durationMs = minutes * 60 * 1000 + seconds * 1000;
+      const secondsOption = interaction.options.getInteger("초");
+      // Omitted entirely -> default to a 5-minute auto-lock instead of
+      // requiring a manual /예측 마감. Explicit 초:0 still means "no auto-lock".
+      const durationMs = secondsOption == null ? DEFAULT_LOCK_DURATION_MS : secondsOption * 1000;
 
       if (durationMs > 0 && durationMs < 5000) {
         return interaction.reply({ content: "너무 짧아요. 최소 5초 이상으로 설정해주세요.", ephemeral: true });
