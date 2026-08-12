@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { playWithPet, PLAY_COST } = require("../../pet/petService");
+const { playWithPet, PLAY_COST, MAX_PLAYS_PER_DAY } = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
 
 function formatRemaining(ms) {
@@ -30,6 +30,12 @@ module.exports = {
       }
       if (result.reason === "not-enough-points") {
         return interaction.reply({ content: `포인트가 부족해요. 놀이 비용은 **${PLAY_COST}**포인트예요.`, ephemeral: true });
+      }
+      if (result.reason === "daily-limit") {
+        return interaction.reply({
+          content: `오늘은 이미 ${MAX_PLAYS_PER_DAY}번 놀아줬어요. 내일 다시 놀아주세요!`,
+          ephemeral: true,
+        });
       }
       return interaction.reply({ content: "오류가 발생했습니다.", ephemeral: true });
     }

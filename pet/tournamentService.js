@@ -3,14 +3,17 @@ const PetTournament = require("../models/pet-tournament");
 const GuildPointsConfig = require("../models/guild-points-config");
 const { getOrCreatePoints, addPoints } = require("../points/pointsService");
 const { addToHouseBank } = require("../points/houseBankService");
+const { sweepPetTournamentBonusBank, getPetTournamentBonusBank } = require("../points/petTournamentBonusBankService");
 const { getPet } = require("./petService");
 const { ensureBattleStats, resolveMatch } = require("./battleService");
 
 // Points economy note: mirrors the draw-style lottery (points/lotteryDrawService.js)
 // as closely as possible - same weekly-recurring-cycle shape, same house-cut-
-// into-houseBank pattern, same setTimeout+rearm scheduling approach.
+// into-houseBank pattern, same setTimeout+rearm scheduling approach. The
+// server-funded top-up used to be a flat BONUS_PER_PARTICIPANT - replaced by
+// sweeping petTournamentBonusBank (half of every /펫밥주기·/펫놀아주기 cost,
+// see petService.routeActionCost) into the pot at settlement instead.
 const ENTRY_FEE = 250;
-const BONUS_PER_PARTICIPANT = 100; // server-funded top-up on the entry-fee pool
 const MIN_PARTICIPANTS = 4; // below this, the week is skipped and refunded
 const HOUSE_CUT_PERCENT = 10;
 const WINNER_SHARE = 0.6; // the rest goes to the runner-up (see runTournament's remainder-based split)
@@ -370,7 +373,8 @@ async function runTournament(guildId, client) {
   const winnerPet = petsByUserId.get(winnerId);
   const runnerUpPet = petsByUserId.get(finalLoserUserId);
 
-  const pot = activeParticipants.length * (ENTRY_FEE + BONUS_PER_PARTICIPANT);
+  const bonusFromBank = await sweepPetTournamentBonusBank(guildId);
+  const pot = activeParticipants.length * ENTRY_FEE + bonusFromBank;
   const houseCut = Math.round(pot * (HOUSE_CUT_PERCENT / 100));
   const distributable = pot - houseCut;
   const winnerPayout = Math.round(distributable * WINNER_SHARE);
@@ -432,7 +436,7 @@ module.exports = {
   rearmScheduledTournaments,
   getNextTournamentTimes,
   buildRound1Matches,
+  getPetTournamentBonusBank,
   ENTRY_FEE,
-  BONUS_PER_PARTICIPANT,
   MIN_PARTICIPANTS,
 };

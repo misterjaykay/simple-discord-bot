@@ -6,8 +6,8 @@ const {
   stopWeeklyTournament,
   registerParticipant,
   scheduleWeeklyTournament,
+  getPetTournamentBonusBank,
   ENTRY_FEE,
-  BONUS_PER_PARTICIPANT,
   MIN_PARTICIPANTS,
 } = require("../../pet/tournamentService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
@@ -115,7 +115,10 @@ async function handleStatus(interaction) {
   }
 
   const isRegistered = tournament.participants.some((p) => p.userId === interaction.user.id);
-  const pot = tournament.participants.length * (ENTRY_FEE + BONUS_PER_PARTICIPANT);
+  // Just a peek (not a sweep) - the bank isn't reset until the tournament
+  // actually settles, so this estimate only grows as the week goes on.
+  const bankSoFar = await getPetTournamentBonusBank(interaction.guild.id);
+  const pot = tournament.participants.length * ENTRY_FEE + bankSoFar;
 
   const embed = new EmbedBuilder()
     .setTitle("🏆 펫 토너먼트")
