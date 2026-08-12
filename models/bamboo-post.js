@@ -34,10 +34,13 @@ const bambooPostSchema = new Schema({
     type: Date,
     default: Date.now,
   },
-  // Purely informational for mods - the bot never acts on this itself.
+  // Set via the 해결/보류/삭제 buttons on the mod alert embed (see
+  // bamboo/bambooView.js + bamboo/componentHandler.js). "hold" is the only
+  // non-terminal status besides "pending" - it can still move to
+  // resolved/archived later, unlike resolved/archived which lock the buttons.
   status: {
     type: String,
-    enum: ["pending", "reviewed", "dismissed"],
+    enum: ["pending", "resolved", "hold", "archived"],
     default: "pending",
   },
   reviewedBy: {

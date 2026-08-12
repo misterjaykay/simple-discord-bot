@@ -1,18 +1,21 @@
-const { EmbedBuilder } = require("discord.js");
+const { PermissionFlagsBits } = require("discord.js");
 const BambooPost = require("../models/bamboo-post");
 const BambooConfig = require("../models/bamboo-config");
+const { buildBambooPostMessage } = require("./bambooView");
 
-const CATEGORY_LABEL = {
-  report: "🚨 신고",
-  suggestion: "💡 건의",
-  complaint: "😠 불만",
-  concern: "💭 고민",
+const STATUS_BY_ACTION = {
+  resolve: "resolved",
+  hold: "hold",
+  archive: "archived",
 };
 
 async function handleBambooComponent(interaction) {
-  if (!interaction.isModalSubmit()) return;
+  if (interaction.isModalSubmit()) return handleSubmit(interaction);
+  if (interaction.isButton()) return handleReviewAction(interaction);
+}
 
-  // customId is "bamboo:submit:<category>" or, for reports, "bamboo:submit:report:<targetUserId>".
+// customId: "bamboo:submit:<category>" or, for reports, "bamboo:submit:report:<targetUserId>".
+async function handleSubmit(interaction) {
   const [, , category, targetUserId] = interaction.customId.split(":");
   const content = interaction.fields.getTextInputValue("content");
 
@@ -29,17 +32,7 @@ async function handleBambooComponent(interaction) {
   const alertChannel = config ? await interaction.guild.channels.fetch(config.alertChannelId).catch(() => null) : null;
 
   if (alertChannel) {
-    const embed = new EmbedBuilder()
-      .setTitle(CATEGORY_LABEL[category] ?? category)
-      .addFields(
-        { name: "작성자", value: `<@${post.authorId}> (${post.authorUsername})` },
-        ...(targetUserId ? [{ name: "신고 대상", value: `<@${targetUserId}>` }] : []),
-        { name: "내용", value: content }
-      )
-      .setFooter({ text: `ID: ${post._id}` })
-      .setTimestamp(post.createdAt);
-
-    await alertChannel.send({ embeds: [embed] });
+    await alertChannel.send(buildBambooPostMessage(post));
   }
 
   const confirmMessage = alertChannel
@@ -47,6 +40,34 @@ async function handleBambooComponent(interaction) {
     : "제출은 기록되었지만, 아직 운영진 알림 채널이 설정되지 않았습니다. 관리자에게 `/대나무숲설정`을 요청해주세요.";
 
   return interaction.reply({ content: confirmMessage, ephemeral: true });
+}
+
+// customId: "bamboo:resolve|hold|archive:<postId>" - the 해결/보류/삭제 buttons.
+async function handleReviewAction(interaction) {
+  const [, action, postId] = interaction.customId.split(":");
+  const newStatus = STATUS_BY_ACTION[action];
+  if (!newStatus) return;
+
+  // The mod channel itself should already be locked down, but this is a cheap
+  // second guard against a misconfigured channel exposing the buttons.
+  if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+    return interaction.reply({ content: "이 작업은 운영진만 할 수 있어요.", ephemeral: true });
+  }
+
+  const post = await BambooPost.findById(postId);
+  if (!post) {
+    return interaction.reply({ content: "이미 삭제되었거나 존재하지 않는 항목이에요.", ephemeral: true });
+  }
+  if (post.status === "resolved" || post.status === "archived") {
+    return interaction.reply({ content: "이미 처리 완료된 항목이에요.", ephemeral: true });
+  }
+
+  post.status = newStatus;
+  post.reviewedBy = interaction.user.id;
+  post.reviewedAt = new Date();
+  await post.save();
+
+  return interaction.update(buildBambooPostMessage(post));
 }
 
 module.exports = { handleBambooComponent };
