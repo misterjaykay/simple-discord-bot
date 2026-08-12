@@ -24,6 +24,22 @@ module.exports = {
     if (sub === "지정") {
       const channel = interaction.options.getChannel("채널");
       await GuildPointsConfig.findOneAndUpdate({ guildId }, { petChannelId: channel.id }, { upsert: true });
+
+      // Announce in the target channel itself too, not just the admin's reply
+      // wherever they ran the command - skipped when they're the same channel
+      // so people don't see the exact same message twice (same pattern as
+      // /펫대전 시작's channel announcement).
+      if (channel.id !== interaction.channelId) {
+        try {
+          const targetChannel = await interaction.client.channels.fetch(channel.id);
+          await targetChannel.send(
+            "🐾 이제부터 이 채널에서만 펫 관련 명령어(입양/정보/밥주기/놀아주기/이름변경/파양/대전)를 사용할 수 있어요!"
+          );
+        } catch (err) {
+          console.error("[pet-channel-config] channel announcement failed:", err.message);
+        }
+      }
+
       return interaction.reply(
         `앞으로 펫 관련 명령어(입양/정보/밥주기/놀아주기/이름변경/파양/대전)는 ${channel}에서만 사용할 수 있어요.`
       );
