@@ -10,6 +10,15 @@ const { addToPetTournamentBonusBank } = require("../points/petTournamentBonusBan
 const ADOPT_COST = 300;
 const FEED_COST = 40;
 const PLAY_COST = 30;
+// Higher than feed/play since evolving is a one-off milestone, not a routine
+// action - roughly 2x feed, well above what a single feed/play cycle earns.
+const EVOLVE_COST = 80;
+
+// Pet slots: slot 1 is free for everyone (see UserPoints.petSlotsUnlocked
+// default), slots 2/3 must be bought once via /펫슬롯 - costs step up per slot
+// since a 2nd/3rd pet is a bigger economy sink than the first.
+const MAX_SLOTS = 3;
+const SLOT_UNLOCK_COSTS = { 2: 3000, 3: 4000 };
 
 // Half of every feed/play cost funds the weekly /펫대전 prize pool, the other
 // half goes to the shared house bank - neither just vanishes anymore (see
@@ -90,34 +99,108 @@ function applyExp(pet, amount) {
   return leveledUp;
 }
 
-async function getPet(guildId, userId) {
-  return Pet.findOne({ guildId, userId });
+async function getPet(guildId, userId, slot) {
+  return Pet.findOne({ guildId, userId, slot });
 }
 
-// Deletes the user's pet outright (no partial refund of ADOPT_COST) so they
-// can adopt again - re-adopting pays ADOPT_COST again since checkAdoptEligibility
-// only blocks when a pet currently exists, which is the actual point sink
-// here rather than charging for the release itself. Returns the deleted pet
-// (for a "you gave up on Lv.N X" message) or null if they had none.
-async function releasePet(guildId, userId) {
-  return Pet.findOneAndDelete({ guildId, userId });
+// All of a user's pets, slot 1 first. Empty array if they have none.
+async function getPets(guildId, userId) {
+  return Pet.find({ guildId, userId }).sort({ slot: 1 });
+}
+
+// How many of MAX_SLOTS this user has paid to unlock (1 if never bought any -
+// see UserPoints.petSlotsUnlocked's schema default).
+async function getUnlockedSlots(guildId, user) {
+  const balance = await getOrCreatePoints(guildId, user);
+  return balance.petSlotsUnlocked ?? 1;
+}
+
+// Which slot number is this user's "active" pet - the one 슬롯-less
+// feed/play/rename/release commands act on (see UserPoints.activePetSlot).
+// Doesn't guarantee a pet actually exists there (e.g. it was released without
+// switching away first) - resolvePetForAction handles that case.
+async function getActiveSlot(guildId, user) {
+  const balance = await getOrCreatePoints(guildId, user);
+  return balance.activePetSlot ?? 1;
+}
+
+// Switches which slot is "active" - only allowed onto a slot that currently
+// has a pet in it, otherwise slot-less commands would silently do nothing.
+async function setActiveSlot(guildId, user, slot) {
+  const pet = await getPet(guildId, user.id, slot);
+  if (!pet) return { ok: false, reason: "slot-empty" };
+
+  const balance = await getOrCreatePoints(guildId, user);
+  balance.activePetSlot = slot;
+  await balance.save();
+
+  return { ok: true, pet };
+}
+
+// Deletes one specific pet outright (no partial refund of ADOPT_COST) so that
+// slot can be re-adopted into - re-adopting pays ADOPT_COST again since
+// checkAdoptEligibility only blocks when every unlocked slot is full, which is
+// the actual point sink here rather than charging for the release itself.
+// Returns the deleted pet (for a "you gave up on Lv.N X" message) or null if
+// that slot was already empty.
+async function releasePet(guildId, userId, slot) {
+  return Pet.findOneAndDelete({ guildId, userId, slot });
+}
+
+// Shared by feed/play/rename/release: resolves which of a user's pets a
+// slot-less invocation should act on.
+//  - no pets at all -> "no-pet"
+//  - a slot was given -> that exact slot ("slot-empty" if nothing's there),
+//    regardless of which slot is active (an explicit slot always wins)
+//  - no slot given, exactly one pet -> that pet (so a single-pet owner never
+//    has to think about slots or activation, same as before this system existed)
+//  - no slot given, 2+ pets -> whichever slot is "active" (see
+//    UserPoints.activePetSlot / /펫슬롯's 활성화 buttons). If the active slot
+//    doesn't actually have a pet right now (e.g. it was released and nothing
+//    new was activated), "no-active-pet" tells the command layer to ask the
+//    user to pick one instead of silently acting on the wrong pet.
+async function resolvePetForAction(guildId, user, requestedSlot) {
+  if (requestedSlot != null) {
+    const pet = await getPet(guildId, user.id, requestedSlot);
+    return pet ? { ok: true, pet } : { ok: false, reason: "slot-empty" };
+  }
+
+  const pets = await getPets(guildId, user.id);
+  if (pets.length === 0) return { ok: false, reason: "no-pet" };
+  if (pets.length === 1) return { ok: true, pet: pets[0] };
+
+  const activeSlot = await getActiveSlot(guildId, user);
+  const activePet = pets.find((p) => p.slot === activeSlot);
+  return activePet ? { ok: true, pet: activePet } : { ok: false, reason: "no-active-pet", pets };
 }
 
 // Every action below returns a small { ok, reason?, ... } object instead of
 // throwing, so the command layer can turn each failure reason into a
 // user-friendly Korean reply without a pile of try/catch.
 
+// First unlocked slot (1..petSlotsUnlocked) with no pet in it, or null if
+// every unlocked slot is already occupied.
+async function getNextEmptySlot(guildId, user) {
+  const [unlockedSlots, pets] = await Promise.all([getUnlockedSlots(guildId, user), getPets(guildId, user.id)]);
+  const occupied = new Set(pets.map((p) => p.slot));
+  for (let slot = 1; slot <= unlockedSlots; slot++) {
+    if (!occupied.has(slot)) return slot;
+  }
+  return null;
+}
+
 // Side-effect-free check, used both before starting a preview session and
 // again right before actually committing one (confirmAdopt) - someone could
-// adopt from another channel or drop below the cost while rerolling.
+// adopt from another channel, drop below the cost, or fill their last open
+// slot while rerolling.
 async function checkAdoptEligibility(guildId, user) {
-  const existing = await getPet(guildId, user.id);
-  if (existing) return { ok: false, reason: "already-have-pet" };
+  const targetSlot = await getNextEmptySlot(guildId, user);
+  if (targetSlot == null) return { ok: false, reason: "slots-full" };
 
   const balance = await getOrCreatePoints(guildId, user);
   if (balance.points < ADOPT_COST) return { ok: false, reason: "not-enough-points" };
 
-  return { ok: true };
+  return { ok: true, targetSlot };
 }
 
 // Draws one random adoptable candidate (first-stage, evolvable - normal
@@ -141,13 +224,14 @@ async function confirmAdopt(guildId, user, candidate) {
   const pet = await Pet.create({
     guildId,
     userId: user.id,
+    slot: eligibility.targetSlot,
     speciesId: candidate.id,
     speciesName: candidate.displayName,
     spriteUrl: candidate.spriteUrl,
     types: candidate.types,
     baseAttack: candidate.baseAttack,
     baseDefense: candidate.baseDefense,
-    nextEvolutionId: candidate.nextEvolution.speciesId,
+    nextEvolutionOptions: candidate.nextEvolution.options,
     nextEvolutionMinLevel: candidate.nextEvolution.minLevel,
     // Backdated by exactly one cooldown, not set to "now" - a fresh pet still
     // shows ~full hunger/happiness (only a couple % off 100), but critically
@@ -161,28 +245,74 @@ async function confirmAdopt(guildId, user, candidate) {
   return { ok: true, pet };
 }
 
-// Mutates pet in place (speciesId/speciesName/spriteUrl/nextEvolution*) if
-// its level has reached the stored evolution threshold. Caller still needs
-// to .save(). Returns { from, to } for the command layer to announce, or
-// null if no evolution happened this time.
-async function checkEvolution(pet) {
-  if (!pet.nextEvolutionId || pet.nextEvolutionMinLevel == null) return null;
-  if (pet.level < pet.nextEvolutionMinLevel) return null;
+// Pets adopted before branch-choice evolution existed only carry the legacy
+// nextEvolutionId - this promotes that into the new options shape the first
+// time it's needed instead of a one-off migration script (same lazy-backfill
+// pattern as tournamentService's petId fallback). undefined (not just an
+// empty array) means "never computed" - a pet already at a true final form
+// has nextEvolutionOptions explicitly set to [] by evolvePet, so it's never
+// mistaken for a legacy doc and re-backfilled from a stale nextEvolutionId.
+async function ensureEvolutionOptions(pet) {
+  if (pet.nextEvolutionOptions !== undefined || !pet.nextEvolutionId) return;
+  const species = await getSpeciesById(pet.nextEvolutionId);
+  pet.nextEvolutionOptions = [{ speciesId: pet.nextEvolutionId, speciesName: species.displayName }];
+  await pet.save();
+}
+
+function isEvolutionReady(pet) {
+  return !!pet.nextEvolutionOptions?.length && pet.nextEvolutionMinLevel != null && pet.level >= pet.nextEvolutionMinLevel;
+}
+
+// Resolves which pet a /진화 invocation targets (same slot rules as
+// feed/play) and backfills its evolution options, without spending anything -
+// used by the command layer to decide whether to evolve directly (one option)
+// or show a branch picker (2+), before any cost is charged.
+async function getEvolutionStatus(guildId, user, requestedSlot) {
+  const resolved = await resolvePetForAction(guildId, user, requestedSlot);
+  if (!resolved.ok) return resolved;
+
+  await ensureEvolutionOptions(resolved.pet);
+  return { ok: true, pet: resolved.pet, ready: isEvolutionReady(resolved.pet) };
+}
+
+// Commits one of a pet's nextEvolutionOptions: charges EVOLVE_COST, routes it
+// like feed/play, then updates species/type/battle-stat fields and refreshes
+// the following evolution's options. Returns { ok:false, reason } for the
+// same not-ready/points-short/slot-resolution cases getEvolutionStatus and
+// feed/play already surface, plus "invalid-choice" if chosenSpeciesId isn't
+// actually one of this pet's current options (stale select menu, tampering).
+async function evolvePet(guildId, user, requestedSlot, chosenSpeciesId) {
+  const resolved = await resolvePetForAction(guildId, user, requestedSlot);
+  if (!resolved.ok) return resolved;
+  const pet = resolved.pet;
+
+  await ensureEvolutionOptions(pet);
+  if (!isEvolutionReady(pet)) return { ok: false, reason: "not-ready" };
+
+  const choice = pet.nextEvolutionOptions.find((o) => o.speciesId === chosenSpeciesId);
+  if (!choice) return { ok: false, reason: "invalid-choice" };
+
+  const balance = await getOrCreatePoints(guildId, user);
+  if (balance.points < EVOLVE_COST) return { ok: false, reason: "not-enough-points" };
+
+  await addPoints(guildId, user, -EVOLVE_COST);
+  await routeActionCost(guildId, EVOLVE_COST);
 
   const fromName = pet.speciesName;
-  const newSpecies = await getSpeciesById(pet.nextEvolutionId);
-  const newNextEvolution = await getFollowingEvolution(pet.nextEvolutionId).catch(() => null);
+  const newSpecies = await getSpeciesById(choice.speciesId);
+  const nextStep = await getFollowingEvolution(choice.speciesId).catch(() => null);
 
-  pet.speciesId = pet.nextEvolutionId;
+  pet.speciesId = choice.speciesId;
   pet.speciesName = newSpecies.displayName;
   pet.spriteUrl = newSpecies.spriteUrl;
   pet.types = newSpecies.types;
   pet.baseAttack = newSpecies.baseAttack;
   pet.baseDefense = newSpecies.baseDefense;
-  pet.nextEvolutionId = newNextEvolution?.speciesId ?? null;
-  pet.nextEvolutionMinLevel = newNextEvolution?.minLevel ?? null;
+  pet.nextEvolutionOptions = nextStep?.options ?? [];
+  pet.nextEvolutionMinLevel = nextStep?.minLevel ?? null;
+  await pet.save();
 
-  return { from: fromName, to: pet.speciesName };
+  return { ok: true, pet, from: fromName, to: pet.speciesName };
 }
 
 // How many times today (todayString()'s noon-ET day) this pet has already
@@ -197,9 +327,10 @@ function recordDailyAction(pet, countField, dateField) {
   pet[dateField] = todayString();
 }
 
-async function feedPet(guildId, user) {
-  const pet = await getPet(guildId, user.id);
-  if (!pet) return { ok: false, reason: "no-pet" };
+async function feedPet(guildId, user, requestedSlot) {
+  const resolved = await resolvePetForAction(guildId, user, requestedSlot);
+  if (!resolved.ok) return resolved;
+  const pet = resolved.pet;
 
   const remainingMs = pet.lastFedAt ? FEED_COOLDOWN_MS - (Date.now() - pet.lastFedAt.getTime()) : 0;
   if (remainingMs > 0) return { ok: false, reason: "cooldown", remainingMs };
@@ -216,15 +347,15 @@ async function feedPet(guildId, user) {
   pet.lastFedAt = new Date();
   recordDailyAction(pet, "feedsToday", "feedsTodayDate");
   const leveledUp = applyExp(pet, feedExpForLevel(pet.level));
-  const evolvedTo = leveledUp ? await checkEvolution(pet) : null;
   await pet.save();
 
-  return { ok: true, pet, leveledUp, evolvedTo };
+  return { ok: true, pet, leveledUp };
 }
 
-async function playWithPet(guildId, user) {
-  const pet = await getPet(guildId, user.id);
-  if (!pet) return { ok: false, reason: "no-pet" };
+async function playWithPet(guildId, user, requestedSlot) {
+  const resolved = await resolvePetForAction(guildId, user, requestedSlot);
+  if (!resolved.ok) return resolved;
+  const pet = resolved.pet;
 
   const remainingMs = pet.lastPlayedAt ? PLAY_COOLDOWN_MS - (Date.now() - pet.lastPlayedAt.getTime()) : 0;
   if (remainingMs > 0) return { ok: false, reason: "cooldown", remainingMs };
@@ -241,10 +372,16 @@ async function playWithPet(guildId, user) {
   pet.lastPlayedAt = new Date();
   recordDailyAction(pet, "playsToday", "playsTodayDate");
   const leveledUp = applyExp(pet, playExpForLevel(pet.level));
-  const evolvedTo = leveledUp ? await checkEvolution(pet) : null;
   await pet.save();
 
-  return { ok: true, pet, leveledUp, evolvedTo };
+  return { ok: true, pet, leveledUp };
+}
+
+// "1번 파이리(Lv.5), 2번 꼬부기(Lv.3)" - used when a slot-less action command
+// (feed/play/rename/release) is ambiguous across a user's multiple pets, so
+// the reply can list what to pick from.
+function formatSlotChoices(pets) {
+  return pets.map((p) => `${p.slot}번 ${p.nickname ?? p.speciesName}(Lv.${p.level})`).join(", ");
 }
 
 function getDisplayStats(pet) {
@@ -255,21 +392,54 @@ function getDisplayStats(pet) {
   };
 }
 
+// Buys the next slot in sequence (2, then 3) - can't skip ahead. Single
+// fetch-mutate-save on the UserPoints doc (not addPoints + a separate save)
+// so the points deduction and the slot bump land atomically in one write.
+async function unlockNextSlot(guildId, user) {
+  const balance = await getOrCreatePoints(guildId, user);
+  const current = balance.petSlotsUnlocked ?? 1;
+  if (current >= MAX_SLOTS) return { ok: false, reason: "maxed" };
+
+  const nextSlot = current + 1;
+  const cost = SLOT_UNLOCK_COSTS[nextSlot];
+  if (balance.points < cost) return { ok: false, reason: "not-enough-points", cost, nextSlot };
+
+  balance.points -= cost;
+  balance.petSlotsUnlocked = nextSlot;
+  await balance.save();
+
+  return { ok: true, slot: nextSlot, cost };
+}
+
 module.exports = {
   checkAdoptEligibility,
   drawCandidate,
   confirmAdopt,
   getPet,
+  getPets,
+  getUnlockedSlots,
+  getActiveSlot,
+  setActiveSlot,
+  resolvePetForAction,
   releasePet,
   feedPet,
   playWithPet,
   getDisplayStats,
+  formatSlotChoices,
+  unlockNextSlot,
+  ensureEvolutionOptions,
+  isEvolutionReady,
+  getEvolutionStatus,
+  evolvePet,
   ADOPT_COST,
   FEED_COST,
   PLAY_COST,
+  EVOLVE_COST,
   FEED_COOLDOWN_MS,
   PLAY_COOLDOWN_MS,
   MAX_FEEDS_PER_DAY,
   MAX_PLAYS_PER_DAY,
   MAX_ADOPT_ATTEMPTS,
+  MAX_SLOTS,
+  SLOT_UNLOCK_COSTS,
 };
