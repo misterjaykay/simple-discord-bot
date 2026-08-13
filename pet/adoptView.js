@@ -10,7 +10,7 @@ function buildPreviewMessage(sessionId, session) {
   const embed = new EmbedBuilder()
     .setTitle(`${session.candidate.displayName}, 어때요?`)
     .setImage(session.candidate.spriteUrl)
-    .setDescription(`시도 ${session.attemptsUsed}/${MAX_ADOPT_ATTEMPTS} · 남은 다시뽑기 **${remaining}**회`)
+    .setDescription(`${session.targetSlot}번 슬롯에 입양돼요 · 시도 ${session.attemptsUsed}/${MAX_ADOPT_ATTEMPTS} · 남은 다시뽑기 **${remaining}**회`)
     .setColor(0xffcb05);
 
   const reroll = new ButtonBuilder()
@@ -50,8 +50,8 @@ function buildExpiredMessage() {
 }
 
 function buildEligibilityFailureMessage(reason) {
-  if (reason === "already-have-pet") {
-    return { content: "이미 펫이 있어요! `/펫정보`로 확인해보세요.", embeds: [], components: [] };
+  if (reason === "slots-full") {
+    return { content: "열려있는 슬롯이 모두 찼어요! `/펫슬롯`으로 슬롯을 더 열어보세요.", embeds: [], components: [] };
   }
   return { content: "포인트가 부족해서 확정할 수 없어요.", embeds: [], components: [] };
 }

@@ -33,7 +33,7 @@ module.exports = {
         try {
           const targetChannel = await interaction.client.channels.fetch(channel.id);
           await targetChannel.send(
-            "🐾 이제부터 이 채널에서만 펫 관련 명령어(입양/정보/밥주기/놀아주기/이름변경/파양/대전)를 사용할 수 있어요!"
+            "🐾 이제부터 이 채널에서만 펫 관련 명령어(입양/정보/밥주기/놀아주기/진화/이름변경/파양/슬롯/활성화/대전)를 사용할 수 있어요!"
           );
         } catch (err) {
           console.error("[pet-channel-config] channel announcement failed:", err.message);
@@ -41,7 +41,7 @@ module.exports = {
       }
 
       return interaction.reply(
-        `앞으로 펫 관련 명령어(입양/정보/밥주기/놀아주기/이름변경/파양/대전)는 ${channel}에서만 사용할 수 있어요.`
+        `앞으로 펫 관련 명령어(입양/정보/밥주기/놀아주기/진화/이름변경/파양/슬롯/활성화/대전)는 ${channel}에서만 사용할 수 있어요.`
       );
     }
 

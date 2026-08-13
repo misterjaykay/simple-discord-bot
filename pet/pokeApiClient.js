@@ -14,9 +14,10 @@ const POOL_MAX_ID = 386;
 const MAX_ADOPT_ATTEMPTS = 50;
 
 // Species like Eevee only evolve via stone/trade/friendship in the real
-// games - this bot has no such mechanic, so they get a synthetic "reach this
-// level" requirement instead (see getAnyEvolution). Kept separate from
-// getNextEvolution's real per-species min_level values.
+// games (no plain level-up trigger at all) - this bot has no such mechanic,
+// so they get a synthetic "reach this level" requirement instead. Also used
+// whenever a branch's siblings disagree on their real level-up number (see
+// getFollowingEvolution).
 const RARE_EVOLUTION_LEVEL = 20;
 
 // Stone/trade/friendship-only evolvers (Eevee, Vulpix, Kadabra, etc.) are
@@ -126,59 +127,51 @@ function findChainNode(node, speciesId) {
   return null;
 }
 
-// Returns { speciesId, minLevel } for the next evolution stage IF it's
-// reachable by a plain level-up with no extra condition (held item, time of
-// day, location, etc.) - those triggers can't be satisfied by this bot, so a
-// species whose only path forward needs one of them is treated the same as
-// having no further evolution. Returns null when there's no simple next stage.
-async function getNextEvolution(speciesId) {
-  const raw = await getRawSpecies(speciesId);
-  const chain = await getEvolutionChain(raw.evolution_chain.url);
-  const node = findChainNode(chain.chain, speciesId);
-  if (!node) return null;
-
-  for (const child of node.evolves_to) {
-    const detail = child.evolution_details?.find((d) => {
-      if (d.trigger?.name !== "level-up" || d.min_level == null) return false;
-      // Reject conditional level-up evolutions (e.g. "level up while knowing
-      // move X", "level up during the day") - only the plain "reach level N" kind.
-      return !d.time_of_day && !d.held_item && !d.known_move && !d.location && !d.min_happiness && !d.min_beauty;
-    });
-    if (detail) {
-      return { speciesId: extractIdFromUrl(child.species.url), minLevel: detail.min_level };
-    }
-  }
-  return null;
+// The real "reach level N" trigger for one evolution_details entry, ignoring
+// any OTHER condition attached alongside it (held item, time of day, known
+// move, ...) - those can't be satisfied by this bot, so they don't count as
+// a usable number even though the branch itself still gets surfaced as an
+// option (see getFollowingEvolution).
+function plainLevelUpMinLevel(child) {
+  const detail = child.evolution_details?.find((d) => {
+    if (d.trigger?.name !== "level-up" || d.min_level == null) return false;
+    return !d.time_of_day && !d.held_item && !d.known_move && !d.location && !d.min_happiness && !d.min_beauty;
+  });
+  return detail?.min_level ?? null;
 }
 
-// Fallback for species whose ONLY path forward needs a trigger this bot can't
-// model (stone, trade, friendship, etc.) - Eevee's whole line lives here.
-// Picks one branch at random (decided once, by the caller storing the
-// result) since these often fork into several forms (Vaporeon/Jolteon/
-// Flareon...), and assigns the synthetic RARE_EVOLUTION_LEVEL as a stand-in
-// for "reach a respectable level" instead of the real-world condition.
-async function getAnyEvolution(speciesId) {
+// Returns { options: [{speciesId, speciesName}], minLevel, rare } describing
+// every next-stage species reachable from `speciesId`, or null if it's a
+// final form. A single child is a normal one-path line. 2+ children (Eevee,
+// but also plain level-up forks like Tyrogue/Wurmple whose branches are
+// differentiated by a stat/personality value this bot can't read) are ALWAYS
+// surfaced as separate options - branch count alone decides this, not trigger
+// type - so /진화 can let the owner pick instead of the bot guessing for them.
+// minLevel is the real shared level when every branch plain-level-ups at the
+// same number; otherwise (any conditional trigger, or branches that disagree)
+// it falls back to the synthetic RARE_EVOLUTION_LEVEL and rare is true.
+async function getFollowingEvolution(speciesId) {
   const raw = await getRawSpecies(speciesId);
   const chain = await getEvolutionChain(raw.evolution_chain.url);
   const node = findChainNode(chain.chain, speciesId);
   if (!node || node.evolves_to.length === 0) return null;
 
-  const branch = node.evolves_to[Math.floor(Math.random() * node.evolves_to.length)];
-  return { speciesId: extractIdFromUrl(branch.species.url), minLevel: RARE_EVOLUTION_LEVEL };
-}
+  const children = node.evolves_to.map((child) => ({
+    speciesId: extractIdFromUrl(child.species.url),
+    plainLevel: plainLevelUpMinLevel(child),
+  }));
 
-// Tries the strict plain-level-up path first; if there isn't one, falls back
-// to the "any trigger" path (marked rare: true) so stone/trade/friendship-only
-// lines aren't excluded outright, just treated as uncommon. Returns null only
-// when a species truly has no further evolution at all.
-async function getFollowingEvolution(speciesId) {
-  const strict = await getNextEvolution(speciesId);
-  if (strict) return { ...strict, rare: false };
+  const sameLevel = children.every((c) => c.plainLevel != null && c.plainLevel === children[0].plainLevel);
+  const minLevel = sameLevel ? children[0].plainLevel : RARE_EVOLUTION_LEVEL;
 
-  const any = await getAnyEvolution(speciesId);
-  if (any) return { ...any, rare: true };
+  const options = await Promise.all(
+    children.map(async (c) => {
+      const species = await fetchSpecies(c.speciesId);
+      return { speciesId: c.speciesId, speciesName: species.displayName };
+    })
+  );
 
-  return null;
+  return { options, minLevel, rare: !sameLevel };
 }
 
 // A species is adoptable as a starting pet only if it's a first stage
@@ -202,7 +195,7 @@ async function getRandomEvolvableBaseSpecies() {
     if (evolution.rare && Math.random() >= RARE_ACCEPT_PROBABILITY) continue;
 
     const species = await fetchSpecies(id);
-    return { ...species, nextEvolution: { speciesId: evolution.speciesId, minLevel: evolution.minLevel } };
+    return { ...species, nextEvolution: { options: evolution.options, minLevel: evolution.minLevel } };
   }
   throw new Error(`no eligible base species found in ${MAX_ADOPT_ATTEMPTS} attempts`);
 }

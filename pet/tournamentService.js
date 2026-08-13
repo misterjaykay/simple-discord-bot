@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require("discord.js");
+const Pet = require("../models/pet");
 const PetTournament = require("../models/pet-tournament");
 const GuildPointsConfig = require("../models/guild-points-config");
 const { getOrCreatePoints, addPoints } = require("../points/pointsService");
@@ -112,9 +113,9 @@ async function stopWeeklyTournament(guildId) {
   return tournament;
 }
 
-async function registerParticipant(guildId, user) {
-  const pet = await getPet(guildId, user.id);
-  if (!pet) throw new Error("펫이 없어요. `/펫입양`으로 먼저 펫을 입양해주세요.");
+async function registerParticipant(guildId, user, slot) {
+  const pet = await getPet(guildId, user.id, slot);
+  if (!pet) throw new Error("그 슬롯엔 펫이 없어요. `/펫정보`로 슬롯을 확인해주세요.");
 
   const tournament = await PetTournament.findOne({ guildId, status: "REGISTRATION" });
   if (!tournament) throw new Error("진행중인 펫 토너먼트가 없어요. 관리자에게 `/펫대전 시작`을 요청해주세요.");
@@ -133,7 +134,7 @@ async function registerParticipant(guildId, user) {
   }
 
   await addPoints(guildId, user, -ENTRY_FEE);
-  tournament.participants.push({ userId: user.id, username: user.username });
+  tournament.participants.push({ userId: user.id, username: user.username, petId: pet._id, slot });
   await tournament.save();
   return tournament;
 }
@@ -303,7 +304,11 @@ async function runTournament(guildId, client) {
 
   const petsByUserId = new Map();
   for (const p of tournament.participants) {
-    const pet = await getPet(guildId, p.userId);
+    // petId pins the exact pet chosen at registration (see registerParticipant)
+    // so battles use that pet even if the owner touches other slots later.
+    // Falls back to slot lookup for participant records from before petId
+    // existed (a tournament mid-cycle when this shipped).
+    const pet = p.petId ? await Pet.findById(p.petId) : await getPet(guildId, p.userId, p.slot ?? 1);
     if (pet) petsByUserId.set(p.userId, pet);
   }
   // Participants who released their pet after registering (rare) can't battle -

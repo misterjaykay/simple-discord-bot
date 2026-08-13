@@ -1,5 +1,16 @@
 const { getSession, updateCandidate, deleteSession } = require("./adoptSession");
-const { drawCandidate, confirmAdopt, releasePet, MAX_ADOPT_ATTEMPTS } = require("./petService");
+const {
+  drawCandidate,
+  confirmAdopt,
+  releasePet,
+  unlockNextSlot,
+  setActiveSlot,
+  evolvePet,
+  getPets,
+  getUnlockedSlots,
+  getActiveSlot,
+  MAX_ADOPT_ATTEMPTS,
+} = require("./petService");
 const {
   buildPreviewMessage,
   buildAdoptedMessage,
@@ -8,14 +19,17 @@ const {
   buildEligibilityFailureMessage,
 } = require("./adoptView");
 const { buildReleasedMessage, buildReleaseCancelledMessage, buildNoPetToReleaseMessage } = require("./releaseView");
+const { buildSlotStatusMessage } = require("./slotView");
+const { buildEvolvedMessage, buildEvolveFailureMessage } = require("./evolveView");
 
 async function handlePetComponent(interaction) {
-  const [, action, sessionId] = interaction.customId.split(":");
+  const [, action, sessionId, extra] = interaction.customId.split(":");
 
   // 파양 confirm/cancel aren't tied to a multi-step session like adopt is -
-  // the customId just carries whichever userId's confirmation this is.
+  // the customId just carries whichever userId + slot this confirmation is for.
   if (action === "releaseConfirm" || action === "releaseCancel") {
     const ownerUserId = sessionId;
+    const slot = Number(extra);
     if (interaction.user.id !== ownerUserId) {
       return interaction.reply({ content: "본인이 실행한 파양만 조작할 수 있어요.", ephemeral: true });
     }
@@ -24,11 +38,91 @@ async function handlePetComponent(interaction) {
       return interaction.update(buildReleaseCancelledMessage());
     }
 
-    const released = await releasePet(interaction.guild.id, interaction.user.id);
+    const released = await releasePet(interaction.guild.id, interaction.user.id, slot);
     if (!released) {
       return interaction.update(buildNoPetToReleaseMessage());
     }
     return interaction.update(buildReleasedMessage(released));
+  }
+
+  // Same customId-only pattern as release - no session needed since the cost
+  // and target slot are already fully determined by the time the button shows.
+  if (action === "unlockSlot") {
+    const ownerUserId = sessionId;
+    if (interaction.user.id !== ownerUserId) {
+      return interaction.reply({ content: "본인만 조작할 수 있어요.", ephemeral: true });
+    }
+
+    const result = await unlockNextSlot(interaction.guild.id, interaction.user);
+    if (!result.ok) {
+      const msg =
+        result.reason === "maxed"
+          ? "이미 모든 슬롯을 열었어요!"
+          : `포인트가 부족해요. ${result.nextSlot}번 슬롯은 ${result.cost.toLocaleString()}포인트가 필요해요.`;
+      return interaction.reply({ content: msg, ephemeral: true });
+    }
+
+    const [pets, unlockedSlots, activeSlot] = await Promise.all([
+      getPets(interaction.guild.id, interaction.user.id),
+      getUnlockedSlots(interaction.guild.id, interaction.user),
+      getActiveSlot(interaction.guild.id, interaction.user),
+    ]);
+    return interaction.update(
+      buildSlotStatusMessage(
+        pets,
+        unlockedSlots,
+        activeSlot,
+        interaction.user.id,
+        `🔓 ${result.slot}번 슬롯을 열었어요! (${result.cost.toLocaleString()}P 사용)`
+      )
+    );
+  }
+
+  // Same customId-only pattern - switches which slot 슬롯-less feed/play/rename/
+  // release act on (see petService.resolvePetForAction).
+  if (action === "activateSlot") {
+    const ownerUserId = sessionId;
+    const slot = Number(extra);
+    if (interaction.user.id !== ownerUserId) {
+      return interaction.reply({ content: "본인만 조작할 수 있어요.", ephemeral: true });
+    }
+
+    const result = await setActiveSlot(interaction.guild.id, interaction.user, slot);
+    if (!result.ok) {
+      return interaction.reply({ content: "그 슬롯엔 펫이 없어요.", ephemeral: true });
+    }
+
+    const [pets, unlockedSlots] = await Promise.all([
+      getPets(interaction.guild.id, interaction.user.id),
+      getUnlockedSlots(interaction.guild.id, interaction.user),
+    ]);
+    return interaction.update(
+      buildSlotStatusMessage(
+        pets,
+        unlockedSlots,
+        slot,
+        interaction.user.id,
+        `🎯 ${result.pet.nickname ?? result.pet.speciesName}(${slot}번 슬롯)을(를) 활성 펫으로 지정했어요!`
+      )
+    );
+  }
+
+  // Same customId-only pattern as release/slot actions - the options
+  // themselves already live on the Pet doc, so no session is needed. slot
+  // pins down exactly which pet this select menu was built for.
+  if (action === "evolveChoice") {
+    const ownerUserId = sessionId;
+    const slot = Number(extra);
+    if (interaction.user.id !== ownerUserId) {
+      return interaction.reply({ content: "본인이 실행한 진화만 조작할 수 있어요.", ephemeral: true });
+    }
+
+    const chosenSpeciesId = Number(interaction.values[0]);
+    const result = await evolvePet(interaction.guild.id, interaction.user, slot, chosenSpeciesId);
+    if (!result.ok) {
+      return interaction.update(buildEvolveFailureMessage(result.reason));
+    }
+    return interaction.update(buildEvolvedMessage(result));
   }
 
   const session = getSession(sessionId);

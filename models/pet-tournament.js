@@ -42,6 +42,12 @@ const petTournamentSchema = new Schema({
     {
       userId: { type: String, required: true },
       username: { type: String },
+      // Which of the user's pets (by slot, and the exact doc via petId) is
+      // entering this week - captured at registration time so the bracket
+      // always battles with that specific pet even if the owner later
+      // touches other slots. See pet/tournamentService.js registerParticipant.
+      petId: { type: Schema.Types.ObjectId, ref: "Pet" },
+      slot: { type: Number },
       _id: false,
     },
   ],

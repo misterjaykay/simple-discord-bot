@@ -1,5 +1,5 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { feedPet, FEED_COST, MAX_FEEDS_PER_DAY } = require("../../pet/petService");
+const { SlashCommandBuilder } = require("discord.js");
+const { feedPet, FEED_COST, MAX_FEEDS_PER_DAY, formatSlotChoices } = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
 
 function formatRemaining(ms) {
@@ -12,15 +12,27 @@ function formatRemaining(ms) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("펫밥주기")
-    .setDescription(`포인트 ${FEED_COST}를 써서 펫에게 밥을 줍니다.`),
+    .setDescription(`포인트 ${FEED_COST}를 써서 펫에게 밥을 줍니다.`)
+    .addIntegerOption((opt) =>
+      opt.setName("슬롯").setDescription("밥을 줄 펫의 슬롯 (펫이 1마리뿐이면 생략 가능)").setMinValue(1).setMaxValue(3)
+    ),
   async execute(interaction) {
     if (!(await requirePetChannel(interaction))) return;
 
-    const result = await feedPet(interaction.guild.id, interaction.user);
+    const result = await feedPet(interaction.guild.id, interaction.user, interaction.options.getInteger("슬롯"));
 
     if (!result.ok) {
       if (result.reason === "no-pet") {
         return interaction.reply({ content: "아직 펫이 없어요. `/펫입양`으로 입양해보세요!", ephemeral: true });
+      }
+      if (result.reason === "slot-empty") {
+        return interaction.reply({ content: "그 슬롯엔 펫이 없어요.", ephemeral: true });
+      }
+      if (result.reason === "no-active-pet") {
+        return interaction.reply({
+          content: `여러 마리를 키우고 있어요: ${formatSlotChoices(result.pets)}\n\`/펫슬롯\`에서 활성 펫을 선택하거나, \`/펫밥주기 슬롯:번호\`로 직접 지정해주세요.`,
+          ephemeral: true,
+        });
       }
       if (result.reason === "cooldown") {
         return interaction.reply({
@@ -41,17 +53,7 @@ module.exports = {
     }
 
     const levelMsg = result.leveledUp ? ` 🎊 레벨업! 지금 Lv.${result.pet.level}` : "";
-    const displayName = result.evolvedTo?.from ?? result.pet.nickname ?? result.pet.speciesName;
-    const content = `🍖 ${displayName}에게 밥을 줬어요!${levelMsg}`;
-
-    if (result.evolvedTo) {
-      const embed = new EmbedBuilder()
-        .setTitle(`✨ ${result.evolvedTo.from} → ${result.evolvedTo.to}(으)로 진화했어요!`)
-        .setImage(result.pet.spriteUrl)
-        .setColor(0xffcb05);
-      return interaction.reply({ content, embeds: [embed] });
-    }
-
-    return interaction.reply(content);
+    const displayName = result.pet.nickname ?? result.pet.speciesName;
+    return interaction.reply(`🍖 ${displayName}에게 밥을 줬어요!${levelMsg}`);
   },
 };

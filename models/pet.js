@@ -1,7 +1,8 @@
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
-// One pet per user per guild (v1 keeps this simple - no multi-pet inventory).
+// Up to MAX_SLOTS (3) pets per user per guild - slot 1 is free, slots 2/3
+// cost points to unlock (see petService.SLOT_UNLOCK_COSTS / UserPoints.petSlotsUnlocked).
 const petSchema = new Schema({
   guildId: {
     type: String,
@@ -9,6 +10,10 @@ const petSchema = new Schema({
   },
   userId: {
     type: String,
+    required: true,
+  },
+  slot: {
+    type: Number, // 1-3
     required: true,
   },
   nickname: {
@@ -33,12 +38,26 @@ const petSchema = new Schema({
     type: Number,
     default: 0,
   },
-  // Next evolution stage's PokeAPI id + the level it triggers at - null once
-  // the pet has reached a stage with no further plain level-up evolution
-  // (either a true final form, or the only path forward needs a
-  // stone/trade/friendship condition this bot can't fulfill).
+  // Legacy single-target field from before branch-choice evolution existed.
+  // Superseded by nextEvolutionOptions below - kept only so petService can
+  // lazily upgrade old pets into the new shape (see petService.ensureEvolutionOptions).
   nextEvolutionId: {
     type: Number,
+  },
+  // Next evolution stage candidate(s) - length 1 for a normal single-path
+  // line, 2+ for branching lines (Eevee, Tyrogue, Wurmple, ...) where /진화
+  // lets the owner pick one. undefined (as opposed to []) means "never
+  // computed yet" so a legacy pet can be told apart from a true final form -
+  // see petService.ensureEvolutionOptions.
+  nextEvolutionOptions: {
+    type: [
+      {
+        speciesId: { type: Number, required: true },
+        speciesName: { type: String, required: true },
+        _id: false,
+      },
+    ],
+    default: undefined,
   },
   nextEvolutionMinLevel: {
     type: Number,
@@ -96,6 +115,6 @@ const petSchema = new Schema({
   },
 });
 
-petSchema.index({ guildId: 1, userId: 1 }, { unique: true });
+petSchema.index({ guildId: 1, userId: 1, slot: 1 }, { unique: true });
 
 module.exports = mongoose.model("Pet", petSchema);
