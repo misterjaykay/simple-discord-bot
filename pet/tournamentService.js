@@ -432,10 +432,35 @@ async function rearmScheduledTournaments(client) {
   }
 }
 
+// Called right after a pet is released (see pet/componentHandler.js) - if
+// that exact pet was entered in the guild's current REGISTRATION tournament,
+// pulls the registration and refunds the entry fee immediately, instead of
+// leaving a "ghost" participant that /펫대전 확인 keeps counting and that
+// would otherwise only get quietly dropped (with no refund) once the
+// tournament actually runs and finds no pet to battle with.
+async function removeParticipantIfRegistered(guildId, userId, petId) {
+  const tournament = await PetTournament.findOne({ guildId, status: "REGISTRATION" });
+  if (!tournament) return;
+
+  const idx = tournament.participants.findIndex((p) => {
+    if (p.userId !== userId) return false;
+    // Legacy participant records (from before registration pinned a specific
+    // petId) can't be disambiguated by pet - any release for this user clears it.
+    if (!p.petId) return true;
+    return String(p.petId) === String(petId);
+  });
+  if (idx === -1) return;
+
+  const [removed] = tournament.participants.splice(idx, 1);
+  await addPoints(guildId, { id: removed.userId, username: removed.username }, ENTRY_FEE);
+  await tournament.save();
+}
+
 module.exports = {
   startWeeklyTournament,
   stopWeeklyTournament,
   registerParticipant,
+  removeParticipantIfRegistered,
   runTournament,
   scheduleWeeklyTournament,
   rearmScheduledTournaments,
