@@ -80,6 +80,15 @@ if (process.env.MONGODB_URI) {
   mongoose.connection.on("connected", () => {
     console.log("[mongo] connected");
 
+    // One-time data backfill for the pet slot system: pets created before the
+    // `slot` field existed have no value for it at all (not even null), so
+    // {slot: 1} queries would silently miss them. Every pre-slots pet was the
+    // user's only pet, so slot 1 is the correct value. Safe to re-run every
+    // boot - the filter only matches docs still missing the field.
+    require("./models/pet")
+      .updateMany({ slot: { $exists: false } }, { $set: { slot: 1 } })
+      .catch((err) => console.error("[mongo] pet slot backfill failed:", err.message));
+
     // Drop/rebuild indexes to match the current schemas. Needed because Mongoose's
     // default autoIndex only ADDS indexes declared in a schema - it never removes
     // ones left over from an older schema version. voicemasterconfigs used to have
@@ -206,7 +215,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    if (interaction.isButton() || interaction.isUserSelectMenu() || interaction.isModalSubmit()) {
+    if (interaction.isButton() || interaction.isUserSelectMenu() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
       // Voicemaster control-panel buttons / select menus / modal submissions
       if (interaction.customId?.startsWith("vm:")) {
         await handleVoicemasterComponent(interaction);

@@ -34,7 +34,7 @@ module.exports = {
       return interaction.editReply("입양 가능한 포켓몬을 찾지 못했어요. 잠시 후 다시 시도해주세요.");
     }
 
-    const sessionId = createSession(interaction.guild.id, interaction.user.id, candidate);
+    const sessionId = createSession(interaction.guild.id, interaction.user.id, candidate, eligibility.targetSlot);
     return interaction.editReply(buildPreviewMessage(sessionId, getSession(sessionId)));
   },
 };

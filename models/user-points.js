@@ -74,6 +74,22 @@ const userPointsSchema = new Schema({
   rpsSessionsDate: {
     type: String,
   },
+  // How many pet slots (out of petService.MAX_SLOTS) this user has unlocked.
+  // Slot 1 is free (everyone starts here); slots 2/3 cost points via /펫슬롯
+  // (see petService.SLOT_UNLOCK_COSTS / unlockNextSlot).
+  petSlotsUnlocked: {
+    type: Number,
+    default: 1,
+  },
+  // Which pet slot is "active" - slot-less /펫밥주기·/펫놀아주기·/펫이름변경·
+  // /펫파양 act on this one when the user owns 2+ pets (see petService's
+  // getActiveSlot/setActiveSlot/resolvePetForAction, switched via /펫슬롯's
+  // 활성화 buttons). Not guaranteed to have a live pet in it - resolvePetForAction
+  // falls back to asking the user to pick if this slot was released.
+  activePetSlot: {
+    type: Number,
+    default: 1,
+  },
   // Manual moderation action (e.g. someone cursed in chat) that blocks a user
   // from placing new /예측 bets - never automated, always applied by a mod via
   // /예측제재. See prediction/predictionBanService.js.

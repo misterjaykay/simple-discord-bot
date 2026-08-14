@@ -99,7 +99,7 @@ async function handleChannelSet(interaction) {
 
 async function handleRegister(interaction) {
   try {
-    await registerParticipant(interaction.guild.id, interaction.user);
+    await registerParticipant(interaction.guild.id, interaction.user, interaction.options.getInteger("슬롯"));
   } catch (err) {
     return interaction.reply({ content: err.message, ephemeral: true });
   }
@@ -159,7 +159,14 @@ module.exports = {
         .setDescription("펫 토너먼트 결과를 공지할 채널을 지정합니다. (관리자 전용)")
         .addChannelOption((opt) => opt.setName("채널").setDescription("공지를 보낼 텍스트 채널").addChannelTypes(ChannelType.GuildText).setRequired(true))
     )
-    .addSubcommand((sub) => sub.setName("신청").setDescription("이번 주 펫 토너먼트에 참가 신청합니다."))
+    .addSubcommand((sub) =>
+      sub
+        .setName("신청")
+        .setDescription("이번 주 펫 토너먼트에 참가 신청합니다.")
+        .addIntegerOption((opt) =>
+          opt.setName("슬롯").setDescription("대전에 내보낼 펫의 슬롯").setMinValue(1).setMaxValue(3).setRequired(true)
+        )
+    )
     .addSubcommand((sub) => sub.setName("확인").setDescription("이번 주 펫 토너먼트 진행 상황을 확인합니다.")),
 
   async execute(interaction) {
