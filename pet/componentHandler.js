@@ -21,6 +21,7 @@ const {
 const { buildReleasedMessage, buildReleaseCancelledMessage, buildNoPetToReleaseMessage } = require("./releaseView");
 const { buildSlotStatusMessage } = require("./slotView");
 const { buildEvolvedMessage, buildEvolveFailureMessage } = require("./evolveView");
+const { removeParticipantIfRegistered } = require("./tournamentService");
 
 async function handlePetComponent(interaction) {
   const [, action, sessionId, extra] = interaction.customId.split(":");
@@ -42,6 +43,9 @@ async function handlePetComponent(interaction) {
     if (!released) {
       return interaction.update(buildNoPetToReleaseMessage());
     }
+    await removeParticipantIfRegistered(interaction.guild.id, interaction.user.id, released._id).catch((err) =>
+      console.error("[pet] failed to clear tournament registration after release:", err.message)
+    );
     return interaction.update(buildReleasedMessage(released));
   }
 
