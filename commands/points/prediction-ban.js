@@ -14,7 +14,7 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName("부여")
-        .setDescription("유저의 예측 베팅 참여를 제한합니다.")
+        .setDescription("유저의 예측 베팅 참여를 제한합니다. (모더레이터 전용)")
         .addUserOption((opt) => opt.setName("유저").setDescription("제재할 유저").setRequired(true))
         .addIntegerOption((opt) =>
           opt.setName("기간").setDescription("제한 시간(분) - 비워두면 직접 해제하기 전까지 무기한").setMinValue(1).setRequired(false)
@@ -24,13 +24,13 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName("해제")
-        .setDescription("유저의 예측 베팅 제한을 해제합니다.")
+        .setDescription("유저의 예측 베팅 제한을 해제합니다. (모더레이터 전용)")
         .addUserOption((opt) => opt.setName("유저").setDescription("해제할 유저").setRequired(true))
     )
     .addSubcommand((sub) =>
       sub
         .setName("확인")
-        .setDescription("유저가 현재 예측 제재 중인지 확인합니다.")
+        .setDescription("유저가 현재 예측 제재 중인지 확인합니다. (모더레이터 전용)")
         .addUserOption((opt) => opt.setName("유저").setDescription("확인할 유저").setRequired(true))
     ),
 

@@ -67,6 +67,16 @@ async function handleReviewAction(interaction) {
   post.reviewedAt = new Date();
   await post.save();
 
+  // 해결/삭제는 처리 완료 = 더 이상 볼 필요 없음이므로 게시판에서 메시지째 지워서
+  // 채널에는 미해결(대기중/보류) 건만 남게 한다. DB 기록(post)은 그대로 남아있음.
+  // 보류는 아직 처리 중이라 채널에 남겨두고 상태만 갱신한다.
+  if (newStatus === "resolved" || newStatus === "archived") {
+    await interaction.deferUpdate();
+    return interaction.message.delete().catch((err) => {
+      console.error("[bamboo] failed to delete reviewed post message:", err.message);
+    });
+  }
+
   return interaction.update(buildBambooPostMessage(post));
 }
 

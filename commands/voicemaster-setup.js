@@ -9,23 +9,23 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName("생성")
-        .setDescription("새로운 '채널 생성' 트리거 채널과 카테고리를 자동으로 만듭니다. (여러 개 만들 수 있어요)")
+        .setDescription("새로운 '채널 생성' 트리거 채널과 카테고리를 자동으로 만듭니다. (여러 개 만들 수 있어요) (관리자 전용)")
         .addStringOption((opt) => opt.setName("이름형식").setDescription("생성될 채널 이름 형식. {user}는 방장 이름으로 대체됩니다. 기본값: {user}의 채널").setRequired(false))
         .addRoleOption((opt) => opt.setName("방장역할").setDescription("채널 방장에게 자동으로 부여/회수할 역할").setRequired(false))
     )
     .addSubcommand((sub) =>
       sub
         .setName("채널지정")
-        .setDescription("이미 있는 음성 채널을 '채널 생성' 트리거로 지정합니다. (기존 트리거면 설정을 갱신합니다)")
+        .setDescription("이미 있는 음성 채널을 '채널 생성' 트리거로 지정합니다. (기존 트리거면 설정을 갱신합니다) (관리자 전용)")
         .addChannelOption((opt) => opt.setName("채널").setDescription("트리거로 사용할 음성 채널").addChannelTypes(ChannelType.GuildVoice).setRequired(true))
         .addStringOption((opt) => opt.setName("이름형식").setDescription("생성될 채널 이름 형식. {user}는 방장 이름으로 대체됩니다.").setRequired(false))
         .addRoleOption((opt) => opt.setName("방장역할").setDescription("채널 방장에게 자동으로 부여/회수할 역할").setRequired(false))
     )
-    .addSubcommand((sub) => sub.setName("목록").setDescription("현재 설정된 트리거 채널 목록을 봅니다."))
+    .addSubcommand((sub) => sub.setName("목록").setDescription("현재 설정된 트리거 채널 목록을 봅니다. (관리자 전용)"))
     .addSubcommand((sub) =>
       sub
         .setName("해제")
-        .setDescription("트리거를 하나 또는 전부 비활성화합니다.")
+        .setDescription("트리거를 하나 또는 전부 비활성화합니다. (관리자 전용)")
         .addChannelOption((opt) => opt.setName("채널").setDescription("비활성화할 트리거 채널 (비워두면 이 서버의 트리거를 전부 해제)").addChannelTypes(ChannelType.GuildVoice).setRequired(false))
     ),
 

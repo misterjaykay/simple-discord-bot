@@ -18,17 +18,17 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName("지정")
-        .setDescription("로그 종류에 채널을 지정합니다.")
+        .setDescription("로그 종류에 채널을 지정합니다. (관리자 전용)")
         .addStringOption((opt) => opt.setName("종류").setDescription("로그 종류").setRequired(true).addChoices(...TYPE_CHOICES))
         .addChannelOption((opt) =>
           opt.setName("채널").setDescription("로그를 보낼 텍스트 채널").addChannelTypes(ChannelType.GuildText).setRequired(true)
         )
     )
-    .addSubcommand((sub) => sub.setName("목록").setDescription("현재 설정된 로그 채널 목록을 봅니다."))
+    .addSubcommand((sub) => sub.setName("목록").setDescription("현재 설정된 로그 채널 목록을 봅니다. (관리자 전용)"))
     .addSubcommand((sub) =>
       sub
         .setName("해제")
-        .setDescription("로그 종류를 하나 또는 전부 해제합니다.")
+        .setDescription("로그 종류를 하나 또는 전부 해제합니다. (관리자 전용)")
         .addStringOption((opt) => opt.setName("종류").setDescription("해제할 로그 종류 (비워두면 전부 해제)").setRequired(false).addChoices(...TYPE_CHOICES))
     ),
 

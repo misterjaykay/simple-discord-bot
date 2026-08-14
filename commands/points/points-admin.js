@@ -1,10 +1,9 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const UserPoints = require("../../models/user-points");
 const { addPoints, setPoints } = require("../../points/pointsService");
 const { setVoiceEventRate, clearVoiceEventRate, DEFAULT_POINTS_PER_INTERVAL } = require("../../points/voicePointsService");
 const { getHouseBank, spendFromHouseBank } = require("../../points/houseBankService");
 
-// Shared by 전체지급/설정: pick the guild members an operation should apply to.
+// Shared by 설정/하우스지급: pick the guild members an operation should apply to.
 // With no role given, that's everyone (minus bots). With a role given, it's
 // members who have it - or, with exclude:true, members who DON'T have it.
 // The exclude flag exists specifically for "give this role's points, but
@@ -33,24 +32,14 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName("지급")
-        .setDescription("특정 유저에게 포인트를 지급합니다. (음수를 넣으면 차감)")
+        .setDescription("특정 유저에게 포인트를 지급합니다. (음수를 넣으면 차감) (관리자 전용)")
         .addUserOption((opt) => opt.setName("유저").setDescription("대상 유저").setRequired(true))
         .addIntegerOption((opt) => opt.setName("포인트").setDescription("지급할 포인트 (음수 가능)").setRequired(true))
     )
     .addSubcommand((sub) =>
       sub
-        .setName("전체지급")
-        .setDescription("서버의 모든 멤버(또는 특정 역할)에게 포인트를 지급합니다.")
-        .addIntegerOption((opt) => opt.setName("포인트").setDescription("지급할 포인트 (기본값 1000)").setMinValue(1).setRequired(false))
-        .addRoleOption((opt) => opt.setName("역할").setDescription("이 역할을 가진 멤버에게만 지급 (비워두면 전체 멤버)").setRequired(false))
-        .addBooleanOption((opt) =>
-          opt.setName("제외").setDescription("반대로 이 역할이 없는 멤버에게만 지급").setRequired(false)
-        )
-    )
-    .addSubcommand((sub) =>
-      sub
         .setName("설정")
-        .setDescription("포인트를 더하지 않고 정확한 값으로 맞춥니다. (전체 또는 특정 역할)")
+        .setDescription("포인트를 더하지 않고 정확한 값으로 맞춥니다. (전체 또는 특정 역할) (관리자 전용)")
         .addIntegerOption((opt) => opt.setName("포인트").setDescription("맞출 정확한 포인트 값").setMinValue(0).setRequired(true))
         .addRoleOption((opt) => opt.setName("역할").setDescription("이 역할을 가진 멤버만 (비워두면 전체 멤버)").setRequired(false))
         .addBooleanOption((opt) =>
@@ -60,7 +49,7 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName("보이스이벤트")
-        .setDescription("보이스채널 5분당 지급 포인트를 임시로 바꿉니다 (금요일 이벤트 등).")
+        .setDescription("보이스채널 5분당 지급 포인트를 임시로 바꿉니다 (금요일 이벤트 등). (관리자 전용)")
         .addIntegerOption((opt) =>
           opt
             .setName("포인트")
@@ -82,7 +71,7 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName("하우스지급")
-        .setDescription("추첨식 복권 하우스컷으로 모인 포인트에서 보너스를 지급합니다.")
+        .setDescription("추첨식 복권 하우스컷으로 모인 포인트에서 보너스를 지급합니다. (관리자 전용)")
         .addIntegerOption((opt) => opt.setName("포인트").setDescription("1인당 지급할 포인트").setMinValue(1).setRequired(true))
         .addUserOption((opt) => opt.setName("유저").setDescription("특정 유저에게만 지급 (비워두면 전체/역할 대상)").setRequired(false))
         .addRoleOption((opt) => opt.setName("역할").setDescription("이 역할을 가진 멤버에게만 지급 (비워두면 전체 멤버)").setRequired(false))
@@ -90,7 +79,7 @@ module.exports = {
           opt.setName("제외").setDescription("반대로 이 역할이 없는 멤버에게만 지급").setRequired(false)
         )
     )
-    .addSubcommand((sub) => sub.setName("하우스잔액").setDescription("하우스 포인트 잔액을 확인합니다.")),
+    .addSubcommand((sub) => sub.setName("하우스잔액").setDescription("하우스 포인트 잔액을 확인합니다. (관리자 전용)")),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
@@ -102,29 +91,6 @@ module.exports = {
       return interaction.reply(
         `${target} 님에게 ${amount.toLocaleString()} 포인트를 ${amount >= 0 ? "지급" : "차감"}했습니다. (현재 ${record.points.toLocaleString()} 포인트)`
       );
-    }
-
-    if (sub === "전체지급") {
-      const amount = interaction.options.getInteger("포인트") ?? UserPoints.DEFAULT_STARTING_POINTS;
-      const role = interaction.options.getRole("역할");
-      const exclude = interaction.options.getBoolean("제외") ?? false;
-      await interaction.deferReply();
-
-      const members = await interaction.guild.members.fetch();
-      const targets = pickTargets(members, role, exclude);
-
-      if (targets.size === 0) {
-        return interaction.editReply(role ? "조건에 맞는 멤버가 없어요." : "지급할 멤버가 없어요.");
-      }
-
-      let count = 0;
-      for (const member of targets.values()) {
-        await addPoints(interaction.guild.id, member.user, amount);
-        count += 1;
-      }
-
-      const who = role ? `<@&${role.id}> 역할이 ${exclude ? "없는" : "있는"} ${count}명` : `${count}명의 멤버`;
-      return interaction.editReply(`${who}에게 ${amount.toLocaleString()} 포인트씩 지급했습니다.`);
     }
 
     if (sub === "설정") {

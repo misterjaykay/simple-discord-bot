@@ -9,13 +9,13 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName("지정")
-        .setDescription("펫 명령어를 이 채널에서만 사용할 수 있게 제한합니다.")
+        .setDescription("펫 명령어를 이 채널에서만 사용할 수 있게 제한합니다. (관리자 전용)")
         .addChannelOption((opt) =>
           opt.setName("채널").setDescription("펫 명령어를 허용할 채널").addChannelTypes(ChannelType.GuildText).setRequired(true)
         )
     )
-    .addSubcommand((sub) => sub.setName("해제").setDescription("채널 제한을 해제합니다 (모든 채널에서 사용 가능)"))
-    .addSubcommand((sub) => sub.setName("확인").setDescription("현재 채널 제한 설정을 확인합니다.")),
+    .addSubcommand((sub) => sub.setName("해제").setDescription("채널 제한을 해제합니다 (모든 채널에서 사용 가능) (관리자 전용)"))
+    .addSubcommand((sub) => sub.setName("확인").setDescription("현재 채널 제한 설정을 확인합니다. (관리자 전용)")),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();

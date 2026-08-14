@@ -9,18 +9,18 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName("연결")
-        .setDescription("닉네임과 디스코드 유저를 연동합니다.")
+        .setDescription("닉네임과 디스코드 유저를 연동합니다. (관리자 전용)")
         .addStringOption((opt) => opt.setName("닉네임").setDescription("발로란트 트래커 닉네임").setRequired(true))
         .addUserOption((opt) => opt.setName("유저").setDescription("연동할 디스코드 유저").setRequired(true))
     )
     .addSubcommand((sub) =>
       sub
         .setName("해제")
-        .setDescription("연동을 해제합니다.")
+        .setDescription("연동을 해제합니다. (관리자 전용)")
         .addStringOption((opt) => opt.setName("닉네임").setDescription("닉네임으로 찾기").setRequired(false))
         .addUserOption((opt) => opt.setName("유저").setDescription("유저로 찾기").setRequired(false))
     )
-    .addSubcommand((sub) => sub.setName("목록").setDescription("현재 연동된 목록을 봅니다.")),
+    .addSubcommand((sub) => sub.setName("목록").setDescription("현재 연동된 목록을 봅니다. (관리자 전용)")),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
