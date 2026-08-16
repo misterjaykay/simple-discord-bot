@@ -246,16 +246,24 @@ async function confirmAdopt(guildId, user, candidate) {
 }
 
 // Pets adopted before branch-choice evolution existed only carry the legacy
-// nextEvolutionId - this promotes that into the new options shape the first
-// time it's needed instead of a one-off migration script (same lazy-backfill
-// pattern as tournamentService's petId fallback). undefined (not just an
-// empty array) means "never computed" - a pet already at a true final form
-// has nextEvolutionOptions explicitly set to [] by evolvePet, so it's never
-// mistaken for a legacy doc and re-backfilled from a stale nextEvolutionId.
+// nextEvolutionId - a SINGLE branch that was already randomly pre-picked at
+// adoption time (back when there was no picker at all, see
+// pokeApiClient.getRandomEvolvableBaseSpecies's old single-option shape).
+// Blindly promoting that stale id into a one-item nextEvolutionOptions would
+// silently deny the owner any real choice (confirmed in production: an Eevee
+// "evolved on its own" because its only stored option was whatever branch
+// had been rolled weeks earlier at adoption). Instead this re-derives the
+// FULL current branch list from the pet's actual species via
+// getFollowingEvolution, the same lookup a freshly-adopted pet gets - so a
+// legacy Eevee gets the real 5-way picker, not a fake single option.
+// undefined (not just an empty array) means "never computed" - a pet already
+// at a true final form has nextEvolutionOptions explicitly set to [] by
+// evolvePet, so it's never mistaken for a legacy doc and recomputed again.
 async function ensureEvolutionOptions(pet) {
   if (pet.nextEvolutionOptions !== undefined || !pet.nextEvolutionId) return;
-  const species = await getSpeciesById(pet.nextEvolutionId);
-  pet.nextEvolutionOptions = [{ speciesId: pet.nextEvolutionId, speciesName: species.displayName }];
+  const following = await getFollowingEvolution(pet.speciesId).catch(() => null);
+  pet.nextEvolutionOptions = following?.options ?? [];
+  if (following?.minLevel != null) pet.nextEvolutionMinLevel = following.minLevel;
   await pet.save();
 }
 
