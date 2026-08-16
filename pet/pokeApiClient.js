@@ -1,11 +1,12 @@
 const axios = require("axios");
 
-// 1~3세대 (National Dex #1-386, Kanto+Johto+Hoenn) - user-chosen range. Wider
-// range means more variety but also more discard-and-retry when looking for
-// an eligible base-stage species (see getRandomEvolvableBaseSpecies below);
-// 386 keeps that retry cost reasonable while still tripling the Gen-1-only pool.
+// 1~6세대 (National Dex #1-721, Kanto~Kalos) - user-chosen range. Wider range
+// means more variety but also more discard-and-retry when looking for an
+// eligible base-stage species (see getRandomEvolvableBaseSpecies below); the
+// eligible fraction of the dex stays roughly constant per generation (~35%),
+// so MAX_ADOPT_ATTEMPTS below has plenty of headroom regardless of range size.
 const POOL_MIN_ID = 1;
-const POOL_MAX_ID = 386;
+const POOL_MAX_ID = 721;
 
 // How many random species we're willing to try before giving up on finding
 // one that's (a) a first-stage Pokemon and (b) evolves via a plain level-up
@@ -181,6 +182,12 @@ async function getFollowingEvolution(speciesId) {
 async function getEligibleBaseSpecies(id) {
   const raw = await getRawSpecies(id);
   if (raw.evolves_from_species) return null; // not a first-stage species
+  // Legendaries/mythicals don't normally evolve, so this filter is usually a
+  // no-op - but PokeAPI's evolution_chain data links Phione -> Manaphy (a
+  // breeding relationship in-game, not a real evolution: evolution_details
+  // is empty) as if it were one, which would otherwise let this mythical
+  // slip into the adopt pool as a "base-stage" species.
+  if (raw.is_legendary || raw.is_mythical) return null;
 
   return getFollowingEvolution(id);
 }
