@@ -3,6 +3,7 @@ const { getOrCreatePoints, addPoints, todayString } = require("../points/pointsS
 const { getRandomEvolvableBaseSpecies, getSpeciesById, getFollowingEvolution } = require("./pokeApiClient");
 const { addToHouseBank } = require("../points/houseBankService");
 const { addToPetTournamentBonusBank } = require("../points/petTournamentBonusBankService");
+const { ensureBattleStats } = require("./battleService");
 
 // Points economy note: chatPointsService/voicePointsService only ever pay
 // points IN - /예측 betting was the only sink so far. These costs give people
@@ -27,6 +28,101 @@ async function routeActionCost(guildId, cost) {
   const toBonus = Math.round(cost * 0.5);
   const toHouse = cost - toBonus;
   await Promise.all([addToPetTournamentBonusBank(guildId, toBonus), addToHouseBank(guildId, toHouse)]);
+}
+
+// /펫알바 job pool - one flavor entry per PokeAPI type (keyed by the same
+// English slug stored in pet.types) plus 2 type-agnostic jobs everyone can
+// draw. Which one a given /펫알바 call lands on is decided by pickJob's
+// weighted RNG below, not shown as a menu - see the "관심 끌기" design
+// discussion this was built for (showing all candidates just makes players
+// always click whichever pays best, so the game rolls instead).
+const JOB_POOL = {
+  normal: { name: "방범대 알바", flavor: "동네를 순찰하며 방범 활동을 도왔다" },
+  fire: { name: "대장간 알바", flavor: "대장간에서 열심히 불을 지폈다" },
+  water: { name: "수족관 알바", flavor: "수족관에서 관람객들을 즐겁게 해줬다" },
+  electric: { name: "발전소 알바", flavor: "발전소 점검을 도왔다" },
+  grass: { name: "농장 알바", flavor: "농장에서 열심히 일손을 도왔다" },
+  ice: { name: "빙수가게 알바", flavor: "빙수가게에서 얼음을 갈았다" },
+  fighting: { name: "체육관 알바", flavor: "체육관에서 트레이너의 훈련을 보조했다" },
+  poison: { name: "방역업체 알바", flavor: "해충 방역 작업을 도왔다" },
+  ground: { name: "채굴 알바", flavor: "채굴 현장에서 땀을 흘렸다" },
+  flying: { name: "택배기사 알바", flavor: "하늘을 날아 택배를 배달했다" },
+  psychic: { name: "타로가게 알바", flavor: "타로가게에서 손님의 운세를 봐줬다" },
+  bug: { name: "양봉장 알바", flavor: "양봉장에서 꿀을 모았다" },
+  rock: { name: "채석장 알바", flavor: "채석장에서 돌을 캤다" },
+  ghost: { name: "방탈출카페 알바", flavor: "방탈출카페에서 손님들을 깜짝 놀래켰다" },
+  dragon: { name: "놀이공원 마스코트 알바", flavor: "놀이공원에서 마스코트로 인기를 끌었다" },
+  dark: { name: "심야 편의점 알바", flavor: "심야 편의점에서 야간 근무를 했다" },
+  steel: { name: "공장 알바", flavor: "공장 조립라인에서 부품을 조립했다" },
+  fairy: { name: "웨딩홀 알바", flavor: "웨딩홀에서 하객들을 맞이했다" },
+};
+
+const GENERIC_JOBS = [
+  { name: "전단지 알바", flavor: "길거리에서 전단지를 돌렸다" },
+  { name: "물류센터 알바", flavor: "물류센터에서 택배 상하차를 도왔다" },
+];
+
+// Share of the daily draw given to the pet's own matched type job(s)
+// (combined - split evenly if the pet has 2+ types), the rest split evenly
+// across GENERIC_JOBS. A pet with no type match yet (legacy pet before
+// ensureBattleStats backfills it) just falls back to generic-only odds.
+const ALBA_TYPE_JOB_WEIGHT = 45;
+
+const ALBA_REWARD_MIN = 45;
+const ALBA_REWARD_MAX = 75;
+
+// Dispatch (/펫파견) trades away the daily roll's upside and the "show up and
+// see what happens" fun for a flat guaranteed payout you don't have to log in
+// for - priced below manual alba's average so parking every pet on permanent
+// dispatch never beats actually playing (see the balance discussion this was
+// tuned from).
+const DISPATCH_DISCOUNT = 0.7;
+const DISPATCH_DURATIONS = [3, 5, 7];
+const DISPATCH_DAILY_RATE = Math.round(((ALBA_REWARD_MIN + ALBA_REWARD_MAX) / 2) * DISPATCH_DISCOUNT);
+
+// Weighted-random job for this pet's daily /펫알바 draw - see ALBA_TYPE_JOB_WEIGHT.
+function pickJob(pet) {
+  const matchedJobs = [...new Set(pet.types)].map((t) => JOB_POOL[t]).filter(Boolean);
+
+  const candidates = [];
+  if (matchedJobs.length > 0) {
+    const perTypeWeight = ALBA_TYPE_JOB_WEIGHT / matchedJobs.length;
+    for (const job of matchedJobs) candidates.push({ job, weight: perTypeWeight });
+  }
+  const genericWeight = (100 - (matchedJobs.length > 0 ? ALBA_TYPE_JOB_WEIGHT : 0)) / GENERIC_JOBS.length;
+  for (const job of GENERIC_JOBS) candidates.push({ job, weight: genericWeight });
+
+  const totalWeight = candidates.reduce((sum, c) => sum + c.weight, 0);
+  let roll = Math.random() * totalWeight;
+  for (const candidate of candidates) {
+    roll -= candidate.weight;
+    if (roll <= 0) return candidate.job;
+  }
+  return candidates[candidates.length - 1].job;
+}
+
+function randomAlbaReward() {
+  return Math.floor(Math.random() * (ALBA_REWARD_MAX - ALBA_REWARD_MIN + 1)) + ALBA_REWARD_MIN;
+}
+
+function isAlbaAvailableToday(pet) {
+  return pet.albaDate !== todayString();
+}
+
+// True while a dispatch is still running - read lazily off dispatchUntil
+// rather than cleared by a scheduled job, so a pet just "comes back" the next
+// time any command touches it after its dispatchUntil has passed.
+function isDispatched(pet) {
+  return !!(pet.dispatchUntil && pet.dispatchUntil.getTime() > Date.now());
+}
+
+function dispatchRemainingDays(pet) {
+  if (!isDispatched(pet)) return 0;
+  return Math.ceil((pet.dispatchUntil.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+}
+
+function dispatchPayout(days) {
+  return DISPATCH_DAILY_RATE * days;
 }
 
 // "10번의 기회" - mobile-gacha-style reroll allowance. Cost is paid once at
@@ -278,6 +374,7 @@ function isEvolutionReady(pet) {
 async function getEvolutionStatus(guildId, user, requestedSlot) {
   const resolved = await resolvePetForAction(guildId, user, requestedSlot);
   if (!resolved.ok) return resolved;
+  if (isDispatched(resolved.pet)) return { ok: false, reason: "dispatched", pet: resolved.pet };
 
   await ensureEvolutionOptions(resolved.pet);
   return { ok: true, pet: resolved.pet, ready: isEvolutionReady(resolved.pet) };
@@ -293,6 +390,7 @@ async function evolvePet(guildId, user, requestedSlot, chosenSpeciesId) {
   const resolved = await resolvePetForAction(guildId, user, requestedSlot);
   if (!resolved.ok) return resolved;
   const pet = resolved.pet;
+  if (isDispatched(pet)) return { ok: false, reason: "dispatched" };
 
   await ensureEvolutionOptions(pet);
   if (!isEvolutionReady(pet)) return { ok: false, reason: "not-ready" };
@@ -339,6 +437,7 @@ async function feedPet(guildId, user, requestedSlot) {
   const resolved = await resolvePetForAction(guildId, user, requestedSlot);
   if (!resolved.ok) return resolved;
   const pet = resolved.pet;
+  if (isDispatched(pet)) return { ok: false, reason: "dispatched", pet };
 
   const remainingMs = pet.lastFedAt ? FEED_COOLDOWN_MS - (Date.now() - pet.lastFedAt.getTime()) : 0;
   if (remainingMs > 0) return { ok: false, reason: "cooldown", remainingMs };
@@ -364,6 +463,7 @@ async function playWithPet(guildId, user, requestedSlot) {
   const resolved = await resolvePetForAction(guildId, user, requestedSlot);
   if (!resolved.ok) return resolved;
   const pet = resolved.pet;
+  if (isDispatched(pet)) return { ok: false, reason: "dispatched", pet };
 
   const remainingMs = pet.lastPlayedAt ? PLAY_COOLDOWN_MS - (Date.now() - pet.lastPlayedAt.getTime()) : 0;
   if (remainingMs > 0) return { ok: false, reason: "cooldown", remainingMs };
@@ -383,6 +483,49 @@ async function playWithPet(guildId, user, requestedSlot) {
   await pet.save();
 
   return { ok: true, pet, leveledUp };
+}
+
+// Daily job draw - pure income, deliberately no exp (feed/play stay the only
+// leveling loop, see the design discussion this was split from). No
+// routeActionCost either since nothing is being spent here to route.
+async function doAlba(guildId, user, requestedSlot) {
+  const resolved = await resolvePetForAction(guildId, user, requestedSlot);
+  if (!resolved.ok) return resolved;
+  const pet = resolved.pet;
+
+  if (isDispatched(pet)) return { ok: false, reason: "dispatched", pet };
+  if (!isAlbaAvailableToday(pet)) return { ok: false, reason: "daily-limit" };
+
+  await ensureBattleStats(pet); // backfills pet.types for pets older than /펫대전
+  const job = pickJob(pet);
+  const reward = randomAlbaReward();
+
+  await addPoints(guildId, user, reward);
+  pet.albaDate = todayString();
+  await pet.save();
+
+  return { ok: true, pet, job, reward };
+}
+
+// Multi-day auto dispatch - guaranteed payout charged up front (see
+// dispatchPayout), no reroll/early-return once started. The slot stays
+// occupied and blocked from feed/play/evolve/release until dispatchUntil
+// passes (see isDispatched's callers).
+async function startDispatch(guildId, user, requestedSlot, days) {
+  if (!DISPATCH_DURATIONS.includes(days)) return { ok: false, reason: "invalid-duration" };
+
+  const resolved = await resolvePetForAction(guildId, user, requestedSlot);
+  if (!resolved.ok) return resolved;
+  const pet = resolved.pet;
+
+  if (isDispatched(pet)) return { ok: false, reason: "already-dispatched" };
+
+  const payout = dispatchPayout(days);
+  await addPoints(guildId, user, payout);
+  pet.dispatchUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  await pet.save();
+
+  return { ok: true, pet, days, payout };
 }
 
 // "1번 파이리(Lv.5), 2번 꼬부기(Lv.3)" - used when a slot-less action command
@@ -439,6 +582,12 @@ module.exports = {
   isEvolutionReady,
   getEvolutionStatus,
   evolvePet,
+  doAlba,
+  startDispatch,
+  isAlbaAvailableToday,
+  isDispatched,
+  dispatchRemainingDays,
+  dispatchPayout,
   ADOPT_COST,
   FEED_COST,
   PLAY_COST,
@@ -450,4 +599,8 @@ module.exports = {
   MAX_ADOPT_ATTEMPTS,
   MAX_SLOTS,
   SLOT_UNLOCK_COSTS,
+  ALBA_REWARD_MIN,
+  ALBA_REWARD_MAX,
+  DISPATCH_DURATIONS,
+  DISPATCH_DAILY_RATE,
 };

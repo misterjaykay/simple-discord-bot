@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { resolvePetForAction } = require("../../pet/petService");
+const { resolvePetForAction, isDispatched, dispatchRemainingDays } = require("../../pet/petService");
 const { buildReleaseConfirmMessage, buildNoActivePetMessage, buildNoPetToReleaseMessage } = require("../../pet/releaseView");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
 
@@ -22,6 +22,12 @@ module.exports = {
         return interaction.reply({ content: "그 슬롯엔 펫이 없어요.", ephemeral: true });
       }
       return interaction.reply({ ...buildNoPetToReleaseMessage(), ephemeral: true });
+    }
+    if (isDispatched(resolved.pet)) {
+      return interaction.reply({
+        content: `이 펫은 파견 중이라 파양할 수 없어요. (복귀까지 약 ${dispatchRemainingDays(resolved.pet)}일)`,
+        ephemeral: true,
+      });
     }
     return interaction.reply({ ...buildReleaseConfirmMessage(resolved.pet, interaction.user.id), ephemeral: true });
   },

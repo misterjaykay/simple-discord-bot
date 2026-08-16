@@ -6,6 +6,7 @@ const {
   unlockNextSlot,
   setActiveSlot,
   evolvePet,
+  startDispatch,
   getPets,
   getUnlockedSlots,
   getActiveSlot,
@@ -22,9 +23,14 @@ const { buildReleasedMessage, buildReleaseCancelledMessage, buildNoPetToReleaseM
 const { buildSlotStatusMessage } = require("./slotView");
 const { buildEvolvedMessage, buildEvolveFailureMessage } = require("./evolveView");
 const { removeParticipantIfRegistered } = require("./tournamentService");
+const {
+  buildDispatchedMessage,
+  buildDispatchCancelledMessage,
+  buildDispatchFailureMessage,
+} = require("./dispatchView");
 
 async function handlePetComponent(interaction) {
-  const [, action, sessionId, extra] = interaction.customId.split(":");
+  const [, action, sessionId, extra, extra2] = interaction.customId.split(":");
 
   // 파양 confirm/cancel aren't tied to a multi-step session like adopt is -
   // the customId just carries whichever userId + slot this confirmation is for.
@@ -127,6 +133,27 @@ async function handlePetComponent(interaction) {
       return interaction.update(buildEvolveFailureMessage(result.reason));
     }
     return interaction.update(buildEvolvedMessage(result));
+  }
+
+  // Same customId-only pattern as release - the payout/duration are already
+  // fully determined by the time the confirm button shows, so no session store.
+  if (action === "dispatchConfirm" || action === "dispatchCancel") {
+    const ownerUserId = sessionId;
+    const slot = Number(extra);
+    if (interaction.user.id !== ownerUserId) {
+      return interaction.reply({ content: "본인이 실행한 파견만 조작할 수 있어요.", ephemeral: true });
+    }
+
+    if (action === "dispatchCancel") {
+      return interaction.update(buildDispatchCancelledMessage());
+    }
+
+    const days = Number(extra2);
+    const result = await startDispatch(interaction.guild.id, interaction.user, slot, days);
+    if (!result.ok) {
+      return interaction.update(buildDispatchFailureMessage(result.reason));
+    }
+    return interaction.update(buildDispatchedMessage(result));
   }
 
   const session = getSession(sessionId);

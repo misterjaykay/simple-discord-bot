@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { getEvolutionStatus, evolvePet, EVOLVE_COST, formatSlotChoices } = require("../../pet/petService");
+const { getEvolutionStatus, evolvePet, EVOLVE_COST, formatSlotChoices, dispatchRemainingDays } = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
 const { buildEvolveChoiceMessage, buildEvolvedMessage, buildEvolveFailureMessage } = require("../../pet/evolveView");
 
@@ -25,6 +25,12 @@ module.exports = {
       if (status.reason === "no-active-pet") {
         return interaction.reply({
           content: `여러 마리를 키우고 있어요: ${formatSlotChoices(status.pets)}\n\`/펫슬롯\`에서 활성 펫을 선택하거나, \`/진화 슬롯:번호\`로 직접 지정해주세요.`,
+          ephemeral: true,
+        });
+      }
+      if (status.reason === "dispatched") {
+        return interaction.reply({
+          content: `이 펫은 파견 중이라 진화시킬 수 없어요. (복귀까지 약 ${dispatchRemainingDays(status.pet)}일)`,
           ephemeral: true,
         });
       }

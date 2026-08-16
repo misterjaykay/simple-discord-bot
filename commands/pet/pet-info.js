@@ -1,5 +1,14 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { getPet, getPets, getDisplayStats, ensureEvolutionOptions, isEvolutionReady } = require("../../pet/petService");
+const {
+  getPet,
+  getPets,
+  getDisplayStats,
+  ensureEvolutionOptions,
+  isEvolutionReady,
+  isDispatched,
+  dispatchRemainingDays,
+  isAlbaAvailableToday,
+} = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
 
 function bar(value) {
@@ -15,6 +24,10 @@ function bar(value) {
 function buildPetEmbed(pet, { showSlot = false } = {}) {
   const stats = getDisplayStats(pet);
   const ready = isEvolutionReady(pet);
+  const dispatched = isDispatched(pet);
+  const albaField = dispatched
+    ? { name: "🚚 파견 중", value: `약 ${dispatchRemainingDays(pet)}일 후 복귀 (밥주기/놀아주기/진화/파양 불가)` }
+    : { name: "오늘의 알바", value: isAlbaAvailableToday(pet) ? "가능 (`/펫알바`)" : "완료" };
   const evolutionField = ready
     ? { name: "✨ 진화 가능!", value: "`/진화`로 지금 진화시킬 수 있어요!" }
     : {
@@ -33,6 +46,7 @@ function buildPetEmbed(pet, { showSlot = false } = {}) {
       { name: "배고픔", value: `${bar(stats.hunger)} ${stats.hunger}%` },
       { name: "친밀도", value: `${bar(stats.happiness)} ${stats.happiness}%` },
       evolutionField,
+      albaField,
       { name: "토너먼트 전적", value: `🏆 우승 ${pet.tournamentWins}회 / 🥈 준우승 ${pet.tournamentRunnerUps}회` }
     )
     .setColor(ready ? 0x57f287 : 0xffcb05);
