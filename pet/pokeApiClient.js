@@ -1,12 +1,14 @@
 const axios = require("axios");
 
-// 1~6세대 (National Dex #1-721, Kanto~Kalos) - user-chosen range. Wider range
+// 1~3세대 (National Dex #1-386, Kanto~Hoenn) - user-chosen range. Wider range
 // means more variety but also more discard-and-retry when looking for an
 // eligible base-stage species (see getRandomEvolvableBaseSpecies below); the
 // eligible fraction of the dex stays roughly constant per generation (~35%),
 // so MAX_ADOPT_ATTEMPTS below has plenty of headroom regardless of range size.
+// (Reverted from a brief Gen 1-6/721 expansion - pending the planned
+// per-generation-pool /펫입양 split instead of one combined wide range.)
 const POOL_MIN_ID = 1;
-const POOL_MAX_ID = 721;
+const POOL_MAX_ID = 386;
 
 // How many random species we're willing to try before giving up on finding
 // one that's (a) a first-stage Pokemon and (b) evolves via a plain level-up
