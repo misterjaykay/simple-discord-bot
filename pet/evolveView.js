@@ -38,6 +38,9 @@ function buildEvolveFailureMessage(reason) {
   if (reason === "invalid-choice") {
     return { content: "이미 지난 선택지예요. `/진화`를 다시 실행해주세요.", embeds: [], components: [] };
   }
+  if (reason === "dispatched") {
+    return { content: "이 펫은 파견 중이라 진화시킬 수 없어요.", embeds: [], components: [] };
+  }
   return { content: "진화 중 오류가 발생했어요.", embeds: [], components: [] };
 }
 

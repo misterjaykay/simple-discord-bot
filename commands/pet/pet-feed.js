@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { feedPet, FEED_COST, MAX_FEEDS_PER_DAY, formatSlotChoices } = require("../../pet/petService");
+const { feedPet, FEED_COST, MAX_FEEDS_PER_DAY, formatSlotChoices, dispatchRemainingDays } = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
 
 function formatRemaining(ms) {
@@ -37,6 +37,12 @@ module.exports = {
       if (result.reason === "cooldown") {
         return interaction.reply({
           content: `아직 배가 안 고파해요. ${formatRemaining(result.remainingMs)} 후에 다시 줘보세요.`,
+          ephemeral: true,
+        });
+      }
+      if (result.reason === "dispatched") {
+        return interaction.reply({
+          content: `지금 파견 중이라 밥을 줄 수 없어요. (복귀까지 약 ${dispatchRemainingDays(result.pet)}일)`,
           ephemeral: true,
         });
       }

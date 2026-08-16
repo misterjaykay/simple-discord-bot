@@ -20,7 +20,7 @@ const petSchema = new Schema({
     type: String,
   },
   speciesId: {
-    type: Number, // PokeAPI pokemon id (1-386, Gen 1-3 - see pet/pokeApiClient.js)
+    type: Number, // PokeAPI pokemon id (1-721, Gen 1-6 - see pet/pokeApiClient.js)
     required: true,
   },
   speciesName: {
@@ -108,6 +108,19 @@ const petSchema = new Schema({
   },
   playsTodayDate: {
     type: String,
+  },
+  // /펫알바 daily gate - todayString() of the last day this pet did a job,
+  // same "reset when the stored date no longer matches today" pattern as
+  // feedsTodayDate/playsTodayDate above, just without a per-day count since
+  // it's capped at 1/day (see petService.isAlbaAvailableToday).
+  albaDate: {
+    type: String,
+  },
+  // /펫파견 - set together at dispatch time, read lazily via
+  // petService.isDispatched (pet.dispatchUntil > now) rather than cleared by
+  // a scheduled job. undefined means never dispatched / not currently on one.
+  dispatchUntil: {
+    type: Date,
   },
   createdAt: {
     type: Date,
