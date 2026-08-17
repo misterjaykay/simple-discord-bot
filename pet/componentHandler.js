@@ -173,7 +173,7 @@ async function handlePetComponent(interaction) {
     await interaction.deferUpdate();
     let candidate;
     try {
-      candidate = await drawCandidate();
+      candidate = await drawCandidate(session.generation);
     } catch (err) {
       console.error("[pet] reroll draw failed:", err.message);
       return interaction.followUp({ content: "다시 뽑는 중 오류가 발생했어요. 한 번 더 시도해주세요.", ephemeral: true });
@@ -191,10 +191,10 @@ async function handlePetComponent(interaction) {
     // click, the 10th reroll adopts that candidate right away.
     if (updated.attemptsUsed >= MAX_ADOPT_ATTEMPTS) {
       deleteSession(sessionId);
-      const result = await confirmAdopt(session.guildId, interaction.user, candidate);
+      const result = await confirmAdopt(session.guildId, interaction.user, candidate, session.generation);
 
       if (!result.ok) {
-        return interaction.editReply(buildEligibilityFailureMessage(result.reason));
+        return interaction.editReply(buildEligibilityFailureMessage(result.reason, result.cost));
       }
       await interaction.editReply(buildAdoptedMessage(result.pet));
       await interaction.channel
@@ -208,10 +208,10 @@ async function handlePetComponent(interaction) {
 
   if (action === "confirm") {
     deleteSession(sessionId);
-    const result = await confirmAdopt(session.guildId, interaction.user, session.candidate);
+    const result = await confirmAdopt(session.guildId, interaction.user, session.candidate, session.generation);
 
     if (!result.ok) {
-      return interaction.update(buildEligibilityFailureMessage(result.reason));
+      return interaction.update(buildEligibilityFailureMessage(result.reason, result.cost));
     }
 
     await interaction.update(buildAdoptedMessage(result.pet));

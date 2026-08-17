@@ -7,7 +7,7 @@ const crypto = require("crypto");
 // buttons go inert. Nobody loses points for that, they just re-run /펫입양.
 const SESSION_TTL_MS = 5 * 60 * 1000; // 5 minutes of inactivity auto-expires a preview
 
-const sessions = new Map(); // sessionId -> { guildId, userId, candidate, targetSlot, attemptsUsed, timeout }
+const sessions = new Map(); // sessionId -> { guildId, userId, candidate, targetSlot, generation, attemptsUsed, timeout }
 
 function scheduleExpiry(sessionId) {
   const session = sessions.get(sessionId);
@@ -20,9 +20,12 @@ function scheduleExpiry(sessionId) {
 // targetSlot is fixed for the life of the session (rerolling only changes the
 // candidate species, not which empty slot it'll land in) - confirmAdopt
 // recomputes it fresh anyway right before committing, so this is display-only.
-function createSession(guildId, userId, candidate, targetSlot) {
+// generation is likewise fixed - every reroll in this session redraws from
+// the same generation pool the user originally picked (see componentHandler's
+// reroll handler).
+function createSession(guildId, userId, candidate, targetSlot, generation) {
   const sessionId = crypto.randomUUID();
-  sessions.set(sessionId, { guildId, userId, candidate, targetSlot, attemptsUsed: 1 });
+  sessions.set(sessionId, { guildId, userId, candidate, targetSlot, generation, attemptsUsed: 1 });
   scheduleExpiry(sessionId);
   return sessionId;
 }

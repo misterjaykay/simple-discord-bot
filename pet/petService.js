@@ -8,7 +8,9 @@ const { ensureBattleStats } = require("./battleService");
 // Points economy note: chatPointsService/voicePointsService only ever pay
 // points IN - /예측 betting was the only sink so far. These costs give people
 // another reason to spend the points they've been earning.
-const ADOPT_COST = 300;
+// 4-6세대 costs more than 1-3세대 - the price gap is deliberate marketing for
+// the newer pool, not a balance knob (see GENERATION_GROUPS in pokeApiClient.js).
+const ADOPT_COSTS = { 1: 250, 2: 300 };
 const FEED_COST = 40;
 const PLAY_COST = 30;
 // Higher than feed/play since evolving is a one-off milestone, not a routine
@@ -233,8 +235,8 @@ async function setActiveSlot(guildId, user, slot) {
   return { ok: true, pet };
 }
 
-// Deletes one specific pet outright (no partial refund of ADOPT_COST) so that
-// slot can be re-adopted into - re-adopting pays ADOPT_COST again since
+// Deletes one specific pet outright (no partial refund of the adopt cost) so
+// that slot can be re-adopted into - re-adopting pays the full cost again since
 // checkAdoptEligibility only blocks when every unlocked slot is full, which is
 // the actual point sink here rather than charging for the release itself.
 // Returns the deleted pet (for a "you gave up on Lv.N X" message) or null if
@@ -289,32 +291,33 @@ async function getNextEmptySlot(guildId, user) {
 // again right before actually committing one (confirmAdopt) - someone could
 // adopt from another channel, drop below the cost, or fill their last open
 // slot while rerolling.
-async function checkAdoptEligibility(guildId, user) {
+async function checkAdoptEligibility(guildId, user, generationGroup) {
   const targetSlot = await getNextEmptySlot(guildId, user);
   if (targetSlot == null) return { ok: false, reason: "slots-full" };
 
+  const cost = ADOPT_COSTS[generationGroup] ?? ADOPT_COSTS[1];
   const balance = await getOrCreatePoints(guildId, user);
-  if (balance.points < ADOPT_COST) return { ok: false, reason: "not-enough-points" };
+  if (balance.points < cost) return { ok: false, reason: "not-enough-points", cost };
 
-  return { ok: true, targetSlot };
+  return { ok: true, targetSlot, cost };
 }
 
 // Draws one random adoptable candidate (first-stage, evolvable - normal
 // level-up lines most of the time, rare stone/trade/friendship-only lines
 // like Eevee occasionally - see pokeApiClient.getRandomEvolvableBaseSpecies).
 // Doesn't touch points or the DB - purely for preview/reroll.
-async function drawCandidate() {
-  return getRandomEvolvableBaseSpecies();
+async function drawCandidate(generationGroup) {
+  return getRandomEvolvableBaseSpecies(generationGroup);
 }
 
 // Commits a previously-drawn candidate as the user's pet: re-checks
 // eligibility (things may have changed since the preview started), deducts
-// ADOPT_COST, and creates the Pet doc.
-async function confirmAdopt(guildId, user, candidate) {
-  const eligibility = await checkAdoptEligibility(guildId, user);
+// that generation's ADOPT_COSTS entry, and creates the Pet doc.
+async function confirmAdopt(guildId, user, candidate, generationGroup) {
+  const eligibility = await checkAdoptEligibility(guildId, user, generationGroup);
   if (!eligibility.ok) return eligibility;
 
-  await addPoints(guildId, user, -ADOPT_COST);
+  await addPoints(guildId, user, -eligibility.cost);
 
   const now = Date.now();
   const pet = await Pet.create({
@@ -588,7 +591,7 @@ module.exports = {
   isDispatched,
   dispatchRemainingDays,
   dispatchPayout,
-  ADOPT_COST,
+  ADOPT_COSTS,
   FEED_COST,
   PLAY_COST,
   EVOLVE_COST,

@@ -1,14 +1,16 @@
 const axios = require("axios");
 
-// 1~3세대 (National Dex #1-386, Kanto~Hoenn) - user-chosen range. Wider range
-// means more variety but also more discard-and-retry when looking for an
-// eligible base-stage species (see getRandomEvolvableBaseSpecies below); the
-// eligible fraction of the dex stays roughly constant per generation (~35%),
-// so MAX_ADOPT_ATTEMPTS below has plenty of headroom regardless of range size.
-// (Reverted from a brief Gen 1-6/721 expansion - pending the planned
-// per-generation-pool /펫입양 split instead of one combined wide range.)
-const POOL_MIN_ID = 1;
-const POOL_MAX_ID = 386;
+// /펫입양 picks one of two National Dex pools instead of one combined range -
+// group 1 is Kanto/Johto/Hoenn, group 2 is Sinnoh/Unova/Kalos. Eligible
+// fraction stays roughly constant per generation (~35%), so MAX_ADOPT_ATTEMPTS
+// below has plenty of headroom for either pool. Splitting instead of combining
+// also keeps each pool's per-species odds close to the original single-range
+// rate rather than diluting both together (see the probability discussion
+// this was designed from).
+const GENERATION_GROUPS = {
+  1: { min: 1, max: 386, label: "1~3세대 (칸토·조호토·호연)" },
+  2: { min: 387, max: 721, label: "4~6세대 (신오·하나·칼로스)" },
+};
 
 // How many random species we're willing to try before giving up on finding
 // one that's (a) a first-stage Pokemon and (b) evolves via a plain level-up
@@ -194,9 +196,10 @@ async function getEligibleBaseSpecies(id) {
   return getFollowingEvolution(id);
 }
 
-async function getRandomEvolvableBaseSpecies() {
+async function getRandomEvolvableBaseSpecies(generationGroup) {
+  const { min, max } = GENERATION_GROUPS[generationGroup] ?? GENERATION_GROUPS[1];
   for (let attempt = 0; attempt < MAX_ADOPT_ATTEMPTS; attempt++) {
-    const id = Math.floor(Math.random() * (POOL_MAX_ID - POOL_MIN_ID + 1)) + POOL_MIN_ID;
+    const id = Math.floor(Math.random() * (max - min + 1)) + min;
     const evolution = await getEligibleBaseSpecies(id).catch(() => null);
     if (!evolution) continue;
     // Rare (stone/trade/friendship-only) lines get discarded and re-rolled
@@ -217,6 +220,7 @@ module.exports = {
   getRandomEvolvableBaseSpecies,
   getSpeciesById,
   getFollowingEvolution,
+  GENERATION_GROUPS,
   getTypeEffectivenessMultiplier,
   TYPE_NAME_KO,
 };
