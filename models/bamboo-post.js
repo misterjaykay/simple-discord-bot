@@ -34,13 +34,15 @@ const bambooPostSchema = new Schema({
     type: Date,
     default: Date.now,
   },
-  // Set via the 해결/보류/삭제 buttons on the mod alert embed (see
-  // bamboo/bambooView.js + bamboo/componentHandler.js). "hold" is the only
-  // non-terminal status besides "pending" - it can still move to
-  // resolved/archived later, unlike resolved/archived which lock the buttons.
+  // Set via the 해결/진행중/보류/거절 buttons on the mod alert embed (see
+  // bamboo/bambooView.js + bamboo/componentHandler.js). "hold"/"inProgress" are
+  // the non-terminal statuses besides "pending" - they can still move on to
+  // resolved/rejected later, unlike resolved/rejected which lock the buttons
+  // and delete the mod-channel message. "archived" is kept only so posts
+  // reviewed before the 거절 rename still load - nothing writes it anymore.
   status: {
     type: String,
-    enum: ["pending", "resolved", "hold", "archived"],
+    enum: ["pending", "resolved", "hold", "inProgress", "rejected", "archived"],
     default: "pending",
   },
   reviewedBy: {
@@ -48,6 +50,10 @@ const bambooPostSchema = new Schema({
   },
   reviewedAt: {
     type: Date,
+  },
+  // Only set when status is "rejected" - shown to the author in the rejection DM.
+  rejectionReason: {
+    type: String,
   },
 });
 
