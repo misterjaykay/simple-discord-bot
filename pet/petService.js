@@ -4,6 +4,7 @@ const { getRandomEvolvableBaseSpecies, getSpeciesById, getFollowingEvolution } =
 const { addToHouseBank } = require("../points/houseBankService");
 const { addToPetTournamentBonusBank } = require("../points/petTournamentBonusBankService");
 const { ensureBattleStats } = require("./battleService");
+const missionService = require("../points/missionService");
 
 // Points economy note: chatPointsService/voicePointsService only ever pay
 // points IN - /예측 betting was the only sink so far. These costs give people
@@ -456,10 +457,12 @@ async function feedPet(guildId, user, requestedSlot) {
   await routeActionCost(guildId, FEED_COST);
   pet.lastFedAt = new Date();
   recordDailyAction(pet, "feedsToday", "feedsTodayDate");
-  const leveledUp = applyExp(pet, feedExpForLevel(pet.level));
+  const buffMultiplier = missionService.getExpBuffMultiplier(balance);
+  const leveledUp = applyExp(pet, Math.round(feedExpForLevel(pet.level) * buffMultiplier));
   await pet.save();
 
-  return { ok: true, pet, leveledUp };
+  const missionResult = await missionService.recordAction(guildId, user, "feed");
+  return { ok: true, pet, leveledUp, missionResult };
 }
 
 async function playWithPet(guildId, user, requestedSlot) {
@@ -482,10 +485,12 @@ async function playWithPet(guildId, user, requestedSlot) {
   await routeActionCost(guildId, PLAY_COST);
   pet.lastPlayedAt = new Date();
   recordDailyAction(pet, "playsToday", "playsTodayDate");
-  const leveledUp = applyExp(pet, playExpForLevel(pet.level));
+  const buffMultiplier = missionService.getExpBuffMultiplier(balance);
+  const leveledUp = applyExp(pet, Math.round(playExpForLevel(pet.level) * buffMultiplier));
   await pet.save();
 
-  return { ok: true, pet, leveledUp };
+  const missionResult = await missionService.recordAction(guildId, user, "play");
+  return { ok: true, pet, leveledUp, missionResult };
 }
 
 // Daily job draw - pure income, deliberately no exp (feed/play stay the only
@@ -507,7 +512,8 @@ async function doAlba(guildId, user, requestedSlot) {
   pet.albaDate = todayString();
   await pet.save();
 
-  return { ok: true, pet, job, reward };
+  const missionResult = await missionService.recordAction(guildId, user, "alba");
+  return { ok: true, pet, job, reward, missionResult };
 }
 
 // Multi-day auto dispatch - guaranteed payout charged up front (see

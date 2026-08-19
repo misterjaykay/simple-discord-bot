@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { playWithPet, PLAY_COST, MAX_PLAYS_PER_DAY, formatSlotChoices, dispatchRemainingDays } = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
+const { sendMissionFollowUp } = require("../../points/missionService");
 
 function formatRemaining(ms) {
   const totalMinutes = Math.ceil(ms / 60000);
@@ -60,6 +61,7 @@ module.exports = {
 
     const levelMsg = result.leveledUp ? ` 🎊 레벨업! 지금 Lv.${result.pet.level}` : "";
     const displayName = result.pet.nickname ?? result.pet.speciesName;
-    return interaction.reply(`🎾 ${displayName}와(과) 신나게 놀아줬어요!${levelMsg}`);
+    await interaction.reply(`🎾 ${displayName}와(과) 신나게 놀아줬어요!${levelMsg}`);
+    await sendMissionFollowUp(interaction, result.missionResult);
   },
 };

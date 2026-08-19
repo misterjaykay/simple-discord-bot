@@ -11,6 +11,7 @@ const {
   MIN_PARTICIPANTS,
 } = require("../../pet/tournamentService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
+const missionService = require("../../points/missionService");
 
 function isAdmin(interaction) {
   return interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ?? false;
@@ -103,9 +104,13 @@ async function handleRegister(interaction) {
   } catch (err) {
     return interaction.reply({ content: err.message, ephemeral: true });
   }
-  return interaction.reply(
+
+  await interaction.reply(
     `🎫 이번 주 펫 토너먼트에 신청했습니다! (참가비 ${ENTRY_FEE.toLocaleString()} 포인트 차감) 금요일 밤 11시 30분(미국 동부시간)에 자동으로 진행됩니다.`
   );
+
+  const missionResult = await missionService.recordAction(interaction.guild.id, interaction.user, "tournament");
+  await missionService.sendMissionFollowUp(interaction, missionResult);
 }
 
 async function handleStatus(interaction) {

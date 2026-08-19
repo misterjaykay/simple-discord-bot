@@ -1,4 +1,5 @@
 const { getOrCreatePoints, todayString } = require("./pointsService");
+const missionService = require("./missionService");
 
 // A small flat daily login incentive, plus a modest streak bonus so people who
 // check in every single day earn a bit more than someone who only drops by
@@ -38,7 +39,15 @@ async function checkIn(guildId, user) {
   record.username = user.username ?? record.username;
   await record.save();
 
-  return { alreadyCheckedIn: false, awarded, streak: record.checkinStreak, totalCheckins: record.totalCheckins };
+  const missionResult = await missionService.recordAction(guildId, user, "checkin");
+
+  return {
+    alreadyCheckedIn: false,
+    awarded,
+    streak: record.checkinStreak,
+    totalCheckins: record.totalCheckins,
+    missionResult,
+  };
 }
 
 // Attendance rate = totalCheckins / days elapsed since their FIRST /출석 (not

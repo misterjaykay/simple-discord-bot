@@ -10,6 +10,8 @@ const {
   isAlbaAvailableToday,
 } = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
+const { getOrCreatePoints } = require("../../points/pointsService");
+const { isExpBuffActive, expBuffRemainingDays, WEEKLY_EXP_BUFF_MULTIPLIER } = require("../../points/missionService");
 
 function bar(value) {
   const filled = Math.round(value / 10);
@@ -21,7 +23,9 @@ function bar(value) {
 // it was before slots existed). Caller must have already awaited
 // ensureEvolutionOptions(pet) so nextEvolutionOptions/isEvolutionReady are
 // accurate even for pets that predate branch-choice evolution.
-function buildPetEmbed(pet, { showSlot = false } = {}) {
+// pointsRecord is the caller's UserPoints doc, fetched once and shared across
+// every pet embed - the exp buff it carries is account-wide, not per-pet.
+function buildPetEmbed(pet, pointsRecord, { showSlot = false } = {}) {
   const stats = getDisplayStats(pet);
   const ready = isEvolutionReady(pet);
   const dispatched = isDispatched(pet);
@@ -37,7 +41,7 @@ function buildPetEmbed(pet, { showSlot = false } = {}) {
           : "더 이상 진화하지 않아요 (최종 진화형)",
       };
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setTitle(showSlot ? `${pet.slot}번 슬롯 · ${pet.nickname ?? pet.speciesName}` : pet.nickname ?? pet.speciesName)
     .setImage(pet.spriteUrl)
     .addFields(
@@ -50,6 +54,15 @@ function buildPetEmbed(pet, { showSlot = false } = {}) {
       { name: "토너먼트 전적", value: `🏆 우승 ${pet.tournamentWins}회 / 🥈 준우승 ${pet.tournamentRunnerUps}회` }
     )
     .setColor(ready ? 0x57f287 : 0xffcb05);
+
+  if (isExpBuffActive(pointsRecord)) {
+    embed.addFields({
+      name: "⚡ EXP 버프",
+      value: `밥/놀아주기 경험치 ${WEEKLY_EXP_BUFF_MULTIPLIER}배 (약 ${expBuffRemainingDays(pointsRecord)}일 남음)`,
+    });
+  }
+
+  return embed;
 }
 
 module.exports = {
@@ -66,8 +79,8 @@ module.exports = {
       if (!pet) {
         return interaction.reply({ content: "그 슬롯엔 펫이 없어요.", ephemeral: true });
       }
-      await ensureEvolutionOptions(pet);
-      return interaction.reply({ embeds: [buildPetEmbed(pet)] });
+      const [, pointsRecord] = await Promise.all([ensureEvolutionOptions(pet), getOrCreatePoints(interaction.guild.id, interaction.user)]);
+      return interaction.reply({ embeds: [buildPetEmbed(pet, pointsRecord)] });
     }
 
     const pets = await getPets(interaction.guild.id, interaction.user.id);
@@ -75,7 +88,10 @@ module.exports = {
       return interaction.reply({ content: "아직 펫이 없어요. `/펫입양`으로 입양해보세요!", ephemeral: true });
     }
 
-    await Promise.all(pets.map((pet) => ensureEvolutionOptions(pet)));
-    return interaction.reply({ embeds: pets.map((pet) => buildPetEmbed(pet, { showSlot: pets.length > 1 })) });
+    const [, pointsRecord] = await Promise.all([
+      Promise.all(pets.map((pet) => ensureEvolutionOptions(pet))),
+      getOrCreatePoints(interaction.guild.id, interaction.user),
+    ]);
+    return interaction.reply({ embeds: pets.map((pet) => buildPetEmbed(pet, pointsRecord, { showSlot: pets.length > 1 })) });
   },
 };

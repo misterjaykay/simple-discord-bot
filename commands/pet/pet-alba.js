@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { doAlba, formatSlotChoices, dispatchRemainingDays } = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
+const { sendMissionFollowUp } = require("../../points/missionService");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -40,8 +41,9 @@ module.exports = {
     }
 
     const displayName = result.pet.nickname ?? result.pet.speciesName;
-    return interaction.reply(
+    await interaction.reply(
       `💼 ${displayName}가(이) [${result.job.name}] 알바를 다녀왔어요! ${result.job.flavor}. **+${result.reward}P** 획득!`
     );
+    await sendMissionFollowUp(interaction, result.missionResult);
   },
 };

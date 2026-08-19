@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require("discord.js");
 const Lottery = require("../../models/lottery");
 const { getOrCreatePoints, todayString } = require("../../points/pointsService");
+const missionService = require("../../points/missionService");
 const {
   startLottery,
   stopLottery,
@@ -137,7 +138,10 @@ async function handleScratch(interaction) {
     .setFooter({ text: `순손익: ${net >= 0 ? "+" : ""}${net.toLocaleString()} 포인트 · 평균 회수율 69.7% · 오늘 남은 횟수: ${playsLeft}` });
 
   const isBigWin = tier.multiplier >= PUBLIC_WIN_MULTIPLIER_THRESHOLD;
-  return interaction.reply({ embeds: [embed], ephemeral: !isBigWin });
+  await interaction.reply({ embeds: [embed], ephemeral: !isBigWin });
+
+  const missionResult = await missionService.recordAction(guildId, interaction.user, "lottery");
+  await missionService.sendMissionFollowUp(interaction, missionResult);
 }
 
 // ---- 추첨식 복권 (/복권 추첨 ...) ----
