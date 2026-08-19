@@ -105,6 +105,56 @@ const userPointsSchema = new Schema({
   predictionBanReason: {
     type: String,
   },
+  // 일일 미션 (see points/missionService.js) - dailyMissionBonusDate guards the
+  // all-5-complete bonus from paying out twice the same day; streak mirrors
+  // checkinService's "yesterday or it resets to 1" pattern.
+  dailyMissionBonusDate: {
+    type: String,
+  },
+  dailyMissionStreak: {
+    type: Number,
+    default: 0,
+  },
+  // 주간 미션 - missionWeekKey is the Monday (per todayString's noon-ET
+  // boundary) this week's counters belong to; ensureWeekFresh resets the
+  // counts below whenever it no longer matches missionService.weekString().
+  missionWeekKey: {
+    type: String,
+  },
+  weeklyFeedCount: {
+    type: Number,
+    default: 0,
+  },
+  weeklyPlayCount: {
+    type: Number,
+    default: 0,
+  },
+  weeklyAlbaCount: {
+    type: Number,
+    default: 0,
+  },
+  weeklyLotteryCount: {
+    type: Number,
+    default: 0,
+  },
+  weeklyTournamentJoined: {
+    type: Boolean,
+    default: false,
+  },
+  // Guards the weekly all-5 reward from paying out twice in the same week.
+  weeklyMissionClaimedWeekKey: {
+    type: String,
+  },
+  // Weekly mission reward buff - multiplies feed/play exp while active (see
+  // petService.feedPet/playWithPet). Overwritten (not stacked) each time the
+  // weekly mission completes, same "just replace it" pattern as
+  // voicePointsService's event-rate override.
+  expBuffMultiplier: {
+    type: Number,
+  },
+  expBuffUntil: {
+    type: Date,
+  },
 });
 
 userPointsSchema.index({ guildId: 1, userId: 1 }, { unique: true });
