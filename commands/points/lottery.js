@@ -21,7 +21,7 @@ const {
 // ---- 즉석복권 (/복권 긁기) ----
 
 // Fixed payout table, ordered by ascending cumulative probability. Deliberately
-// has a house edge - expected return is ~0.697x the ticket amount - same
+// has a house edge - expected return is ~0.7635x the ticket amount - same
 // reasoning as a real scratch lottery: this is meant to be a fun points sink,
 // not a reliable way to grind points (that's what voice/chat/출석/예측 are for).
 // 꽝 was tuned down from 70% to 65% (a bare "70%" felt too harsh once the odds
@@ -32,16 +32,17 @@ const {
 // Later, players kept complaining it "never pays out" even though the return
 // rate looked reasonable on paper - turned out the real driver was that
 // 꽝+반값 (net-loss outcomes) made up 84.2% of plays, not the average return.
-// So 꽝 and 반값 were trimmed further (61% / 18.2%) and a new 2배 tier added
-// to lower that net-loss rate to ~79.2% and make an actual "you came out
-// ahead" result more frequent, at the cost of the return rate drifting up
-// to 69.7%. 3배/10배/잭팟 were left untouched so the rare big-win moments
-// keep their rarity.
+// So 꽝 and 반값 were trimmed further and a new 2배 tier added to lower that
+// net-loss rate and push the return rate up - through a few more rounds of
+// tuning (a 2배 tier funded from 꽝, then split further between 본전/반값)
+// it landed here: 꽝 55.8% / 반값 19.7% / 본전 10.3% / 2배 7.7%, return rate
+// ~76.35%. 3배/10배/잭팟 were left untouched throughout so the rare big-win
+// moments keep their rarity.
 const TABLE = [
-  { chance: 0.61, multiplier: 0, label: "꽝" },
-  { chance: 0.182, multiplier: 0.5, label: "반값 당첨" },
-  { chance: 0.088, multiplier: 1, label: "본전" },
-  { chance: 0.055, multiplier: 2, label: "2배 당첨" },
+  { chance: 0.558, multiplier: 0, label: "꽝" },
+  { chance: 0.197, multiplier: 0.5, label: "반값 당첨" },
+  { chance: 0.103, multiplier: 1, label: "본전" },
+  { chance: 0.077, multiplier: 2, label: "2배 당첨" },
   { chance: 0.046, multiplier: 3, label: "3배 당첨" },
   { chance: 0.017, multiplier: 10, label: "10배 당첨" },
   { chance: 0.002, multiplier: 50, label: "🎉 잭팟 50배!" },
@@ -134,7 +135,7 @@ async function handleScratch(interaction) {
     .setDescription(`${tier.label}!\n${amount.toLocaleString()} 포인트를 걸어서 ${payout.toLocaleString()} 포인트를 받았어요.`)
     .addFields({ name: "확률표", value: oddsTableText() })
     .setColor(net > 0 ? 0x57f287 : net === 0 ? 0xf1c40f : 0xed4245)
-    .setFooter({ text: `순손익: ${net >= 0 ? "+" : ""}${net.toLocaleString()} 포인트 · 평균 회수율 69.7% · 오늘 남은 횟수: ${playsLeft}` });
+    .setFooter({ text: `순손익: ${net >= 0 ? "+" : ""}${net.toLocaleString()} 포인트 · 평균 회수율 76.35% · 오늘 남은 횟수: ${playsLeft}` });
 
   const isBigWin = tier.multiplier >= PUBLIC_WIN_MULTIPLIER_THRESHOLD;
   return interaction.reply({ embeds: [embed], ephemeral: !isBigWin });
