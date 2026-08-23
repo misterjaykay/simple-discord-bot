@@ -22,7 +22,7 @@ const {
 // ---- 즉석복권 (/복권 긁기) ----
 
 // Fixed payout table, ordered by ascending cumulative probability. Deliberately
-// has a house edge - expected return is ~0.7635x the ticket amount - same
+// has a house edge - expected return is ~0.8035x the ticket amount - same
 // reasoning as a real scratch lottery: this is meant to be a fun points sink,
 // not a reliable way to grind points (that's what voice/chat/출석/예측 are for).
 // 꽝 was tuned down from 70% to 65% (a bare "70%" felt too harsh once the odds
@@ -35,10 +35,12 @@ const {
 // 꽝+반값 (net-loss outcomes) made up 84.2% of plays, not the average return.
 // So 꽝 and 반값 were trimmed further and a new 2배 tier added to lower that
 // net-loss rate and push the return rate up - through a few more rounds of
-// tuning (a 2배 tier funded from 꽝, then split further between 본전/반값)
-// it landed here: 꽝 55.8% / 반값 19.7% / 본전 10.3% / 2배 7.7%, return rate
-// ~76.35%. 3배/10배/잭팟 were left untouched throughout so the rare big-win
-// moments keep their rarity.
+// tuning it landed at 꽝 55.8% / 반값 19.7% / 본전 10.3% / 2배 7.7%. Once the
+// ticket price itself also came down (100 -> 70, see TICKET_PRICE) to ease
+// the weekly-mission grind, the 잭팟 multiplier was bumped 50x -> 70x to keep
+// its absolute payout close to what it used to be (4,900 vs the old 5,000) -
+// otherwise a cheaper ticket would have quietly shrunk the one prize that's
+// supposed to feel huge. 3배/10배 kept their original multipliers throughout.
 const TABLE = [
   { chance: 0.558, multiplier: 0, label: "꽝" },
   { chance: 0.197, multiplier: 0.5, label: "반값 당첨" },
@@ -46,7 +48,7 @@ const TABLE = [
   { chance: 0.077, multiplier: 2, label: "2배 당첨" },
   { chance: 0.046, multiplier: 3, label: "3배 당첨" },
   { chance: 0.017, multiplier: 10, label: "10배 당첨" },
-  { chance: 0.002, multiplier: 50, label: "🎉 잭팟 50배!" },
+  { chance: 0.002, multiplier: 70, label: "🎉 잭팟 70배!" },
 ];
 
 // Half of every "꽝" (total loss) bet feeds the draw-style lottery's jackpot
@@ -56,8 +58,12 @@ const JACKPOT_FEED_PERCENT = 50;
 const DAILY_PLAY_LIMIT = 5;
 
 // Fixed ticket price - no `금액` option, so scratching a ticket is a single
-// quick action instead of a decision every time.
-const TICKET_PRICE = 100;
+// quick action instead of a decision every time. Lowered from 100 - once
+// this became one of the 5 daily missions and a 10x/week weekly mission
+// target, players were effectively forced to spend on top of what they're
+// already pouring into pet care, so cutting the price to 70 roughly halves
+// that weekly-mission cost (1,000 -> 700 points).
+const TICKET_PRICE = 70;
 
 // Only a genuinely big win (3x+) gets broadcast to the channel - 꽝/반값/본전
 // results are ephemeral so 5 plays/day/person doesn't flood busy channels with
@@ -136,7 +142,7 @@ async function handleScratch(interaction) {
     .setDescription(`${tier.label}!\n${amount.toLocaleString()} 포인트를 걸어서 ${payout.toLocaleString()} 포인트를 받았어요.`)
     .addFields({ name: "확률표", value: oddsTableText() })
     .setColor(net > 0 ? 0x57f287 : net === 0 ? 0xf1c40f : 0xed4245)
-    .setFooter({ text: `순손익: ${net >= 0 ? "+" : ""}${net.toLocaleString()} 포인트 · 평균 회수율 76.35% · 오늘 남은 횟수: ${playsLeft}` });
+    .setFooter({ text: `순손익: ${net >= 0 ? "+" : ""}${net.toLocaleString()} 포인트 · 평균 회수율 80.35% · 오늘 남은 횟수: ${playsLeft}` });
 
   const isBigWin = tier.multiplier >= PUBLIC_WIN_MULTIPLIER_THRESHOLD;
   await interaction.reply({ embeds: [embed], ephemeral: !isBigWin });
