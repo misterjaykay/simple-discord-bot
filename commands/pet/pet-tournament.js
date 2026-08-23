@@ -66,7 +66,7 @@ async function handleStart(interaction) {
   return interaction.reply(
     `🏆 펫 토너먼트를 시작했습니다! 참가비 ${ENTRY_FEE.toLocaleString()} 포인트, 신청은 상시 가능하며 매주 금요일 밤 9시(미국 동부시간) 마감됩니다. ` +
       `마감 후 밤 11시 30분에 자동으로 대전이 진행됩니다(다음 진행: <t:${Math.floor(tournament.runAt.getTime() / 1000)}:F>). ` +
-      `최소 ${MIN_PARTICIPANTS}명 미만이면 그 주는 취소되고 참가비가 환불돼요. \`/펫대전 신청\`으로 참가하세요. ${channelNote}`
+      `최소 ${MIN_PARTICIPANTS}마리 미만이면 그 주는 취소되고 참가비가 환불돼요. \`/펫대전 신청\`으로 참가하세요 (펫마다 각각 신청할 수 있어요). ${channelNote}`
   );
 }
 
@@ -106,7 +106,8 @@ async function handleRegister(interaction) {
   }
 
   await interaction.reply(
-    `🎫 이번 주 펫 토너먼트에 신청했습니다! (참가비 ${ENTRY_FEE.toLocaleString()} 포인트 차감) 금요일 밤 11시 30분(미국 동부시간)에 자동으로 진행됩니다.`
+    `🎫 이 펫으로 이번 주 펫 토너먼트에 신청했습니다! (참가비 ${ENTRY_FEE.toLocaleString()} 포인트 차감) 금요일 밤 11시 30분(미국 동부시간)에 자동으로 진행됩니다. ` +
+      `다른 슬롯의 펫도 \`/펫대전 신청\`으로 추가 등록할 수 있어요.`
   );
 
   const missionResult = await missionService.recordAction(interaction.guild.id, interaction.user, "tournament");
@@ -119,7 +120,9 @@ async function handleStatus(interaction) {
     return interaction.reply({ content: "진행중인 펫 토너먼트가 없어요.", ephemeral: true });
   }
 
-  const isRegistered = tournament.participants.some((p) => p.userId === interaction.user.id);
+  // Now counts pets, not people - one user can register more than one (see
+  // tournamentService.registerParticipant), so this can exceed their headcount.
+  const myEntryCount = tournament.participants.filter((p) => p.userId === interaction.user.id).length;
   // Just a peek (not a sweep) - the bank isn't reset until the tournament
   // actually settles, so this estimate only grows as the week goes on.
   const bankSoFar = await getPetTournamentBonusBank(interaction.guild.id);
@@ -128,11 +131,11 @@ async function handleStatus(interaction) {
   const embed = new EmbedBuilder()
     .setTitle("🏆 펫 토너먼트")
     .addFields(
-      { name: "참가자", value: `${tournament.participants.length}명 (최소 ${MIN_PARTICIPANTS}명)`, inline: true },
+      { name: "참가 펫", value: `${tournament.participants.length}마리 (최소 ${MIN_PARTICIPANTS}마리)`, inline: true },
       { name: "현재 예상 상금 풀", value: `${pot.toLocaleString()} 포인트`, inline: true },
       { name: "신청 마감", value: `<t:${Math.floor(tournament.registrationCloseAt.getTime() / 1000)}:F>` },
       { name: "진행 시각", value: `<t:${Math.floor(tournament.runAt.getTime() / 1000)}:F>` },
-      { name: "내 신청 상태", value: isRegistered ? "신청 완료" : "미신청" }
+      { name: "내 신청 상태", value: myEntryCount > 0 ? `${myEntryCount}마리 신청 완료` : "미신청" }
     )
     .setColor(0xffcb05);
 

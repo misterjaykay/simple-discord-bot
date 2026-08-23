@@ -5,12 +5,19 @@ const matchSchema = new Schema(
   {
     player1UserId: { type: String, required: true },
     player2UserId: { type: String }, // absent when player1 has a bye
+    // One owner can now enter multiple pets (see /펫대전 신청), so a match can
+    // have player1UserId === player2UserId - these petId fields are what
+    // actually disambiguates which of that owner's pets is which side.
+    player1PetId: { type: Schema.Types.ObjectId, ref: "Pet" },
+    player2PetId: { type: Schema.Types.ObjectId, ref: "Pet" },
     winnerUserId: { type: String },
+    winnerPetId: { type: Schema.Types.ObjectId, ref: "Pet" },
     isBye: { type: Boolean, default: false },
-    // Per-roll winner userId, in order - length 1 outside the final, up to 3
-    // in the final (best-of-3). Lets the bracket embed render "⭕❌⭕ vs ❌⭕❌"
-    // instead of just marking the overall winner (see tournamentService's
-    // formatBracketMessage).
+    // Per-roll winner side ("A" = player1, "B" = player2), in order - length 1
+    // outside the final, up to 3 in the final (best-of-3). Lets the bracket
+    // embed render "⭕❌⭕ vs ❌⭕❌" instead of just marking the overall winner
+    // (see tournamentService's formatBracketMessage). Side letters rather than
+    // userId for the same same-owner-multi-pet reason as winnerPetId above.
     rounds: { type: [String] },
   },
   { _id: false }
@@ -58,8 +65,10 @@ const petTournamentSchema = new Schema({
   runAt: { type: Date },
   bracket: [roundSchema],
   winnerId: { type: String },
+  winnerPetId: { type: Schema.Types.ObjectId, ref: "Pet" },
   winnerPetName: { type: String },
   runnerUpId: { type: String },
+  runnerUpPetId: { type: Schema.Types.ObjectId, ref: "Pet" },
   runnerUpPetName: { type: String },
   pot: { type: Number },
   houseCut: { type: Number },
