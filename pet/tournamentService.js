@@ -124,8 +124,10 @@ async function registerParticipant(guildId, user, slot) {
     throw new Error("이번 주 신청은 마감됐어요. 다음 주 신청 기간(토~목)에 다시 시도해주세요.");
   }
 
-  if (tournament.participants.some((p) => p.userId === user.id)) {
-    throw new Error("이미 이번 주 토너먼트에 신청하셨어요.");
+  // One entry per pet slot, not per user - an owner can register every pet
+  // they have (up to their unlocked slot count) by calling this once per slot.
+  if (tournament.participants.some((p) => p.userId === user.id && p.slot === slot)) {
+    throw new Error("이미 그 슬롯의 펫으로 이번 주 토너먼트에 신청하셨어요.");
   }
 
   const balance = await getOrCreatePoints(guildId, user);
@@ -150,7 +152,8 @@ function shuffle(array) {
 
 // Round 1 only: pads the field up to the next power of 2 with random byes
 // (auto-advancing, no match played) so every later round is a clean pairwise
-// bracket with no further byes needed.
+// bracket with no further byes needed. Entrants carry a per-pet entrantId
+// (not just userId) since one owner can now have multiple pets in the field.
 function buildRound1Matches(entrants) {
   const shuffled = shuffle(entrants);
   const n = shuffled.length;
@@ -161,9 +164,9 @@ function buildRound1Matches(entrants) {
   const byeRecipients = shuffled.slice(0, byesNeeded);
   const paired = shuffled.slice(byesNeeded);
 
-  const matches = byeRecipients.map((p) => ({ player1UserId: p.userId, winnerUserId: p.userId, isBye: true }));
+  const matches = byeRecipients.map((entrant) => ({ player1: entrant, isBye: true }));
   for (let i = 0; i < paired.length; i += 2) {
-    matches.push({ player1UserId: paired[i].userId, player2UserId: paired[i + 1].userId, isBye: false });
+    matches.push({ player1: paired[i], player2: paired[i + 1], isBye: false });
   }
   return matches;
 }
@@ -173,7 +176,7 @@ function buildRound1Matches(entrants) {
 function pairEntrants(entrants) {
   const matches = [];
   for (let i = 0; i < entrants.length; i += 2) {
-    matches.push({ player1UserId: entrants[i].userId, player2UserId: entrants[i + 1].userId, isBye: false });
+    matches.push({ player1: entrants[i], player2: entrants[i + 1], isBye: false });
   }
   return matches;
 }
@@ -186,23 +189,24 @@ function clearScheduledTournament(guildId) {
   }
 }
 
-// petNameByUserId: userId -> pet nickname/species label, so the bracket reads
-// "@민수(파이리)" instead of just "@민수" - mentions inside an embed render as
-// clickable tags but don't actually notify anyone (unlike message content
-// mentions), and allowedMentions:{parse:[]} on the send call (see
-// announceResult) guarantees that regardless.
-// One ✅/❌ per roll this pet played, in order - for a normal (single-roll)
+// petNameByPetId: petId string -> pet nickname/species label, so the bracket
+// reads "@민수(파이리)" instead of just "@민수" - mentions inside an embed
+// render as clickable tags but don't actually notify anyone (unlike message
+// content mentions), and allowedMentions:{parse:[]} on the send call (see
+// announceResult) guarantees that regardless. Keyed by petId rather than
+// userId since one owner can now have multiple pets in the bracket at once.
+// One ✅/❌ per roll this side played, in order - for a normal (single-roll)
 // match that's just one symbol, and for the best-of-3 final it reads as a
 // sequence like "✅❌✅" instead of a bare "2:1" score. ✅ (not a plain circle)
 // specifically because it renders green in every Discord client, so a win
 // reads as green / a loss reads as red at a glance with no custom styling.
-function rollSequence(rounds, userId) {
-  return rounds.map((roundWinnerId) => (roundWinnerId === userId ? "✅" : "❌")).join("");
+function rollSequence(rounds, side) {
+  return rounds.map((roundWinnerSide) => (roundWinnerSide === side ? "✅" : "❌")).join("");
 }
 
-function formatBracketMessage(tournament, petNameByUserId) {
-  const label = (userId) => {
-    const petName = petNameByUserId.get(userId);
+function formatBracketMessage(tournament, petNameByPetId) {
+  const label = (userId, petId) => {
+    const petName = petId ? petNameByPetId.get(String(petId)) : null;
     return petName ? `<@${userId}>(${petName})` : `<@${userId}>`;
   };
 
@@ -211,13 +215,15 @@ function formatBracketMessage(tournament, petNameByUserId) {
     lines.push(`**${roundEntry.round}라운드**`);
     for (const m of roundEntry.matches) {
       if (m.isBye) {
-        lines.push(`　🎫 부전승: ${label(m.player1UserId)}`);
+        lines.push(`　🎫 부전승: ${label(m.player1UserId, m.player1PetId)}`);
       } else {
-        const p1Mark = rollSequence(m.rounds, m.player1UserId);
-        const p2Mark = rollSequence(m.rounds, m.player2UserId);
+        const p1Mark = rollSequence(m.rounds, "A");
+        const p2Mark = rollSequence(m.rounds, "B");
         // Marks sit together in the middle, flanking "vs" - reads as
         // "player ❌ vs ✅ player" instead of each mark trailing its own name.
-        lines.push(`　${label(m.player1UserId)} ${p1Mark} vs ${p2Mark} ${label(m.player2UserId)}`);
+        lines.push(
+          `　${label(m.player1UserId, m.player1PetId)} ${p1Mark} vs ${p2Mark} ${label(m.player2UserId, m.player2PetId)}`
+        );
       }
     }
   }
@@ -235,21 +241,21 @@ async function announceSkip(guildId, client, participantCount) {
     const channel = await getAnnounceChannel(guildId, client);
     if (!channel) return;
     await channel.send(
-      `😅 이번 주 펫 토너먼트는 참가자가 ${participantCount}명뿐이라(최소 ${MIN_PARTICIPANTS}명 필요) 취소됐어요. 참가비는 전액 환불됐습니다.`
+      `😅 이번 주 펫 토너먼트는 참가 펫이 ${participantCount}마리뿐이라(최소 ${MIN_PARTICIPANTS}마리 필요) 취소됐어요. 참가비는 전액 환불됐습니다.`
     );
   } catch (err) {
     console.error("[pet-tournament] skip announcement failed:", err.message);
   }
 }
 
-async function announceResult(guildId, client, tournament, petNameByUserId) {
+async function announceResult(guildId, client, tournament, petNameByPetId) {
   try {
     const channel = await getAnnounceChannel(guildId, client);
     if (!channel) return;
 
     const embed = new EmbedBuilder()
       .setTitle("🏆 이번 주 펫 토너먼트 결과")
-      .setDescription(formatBracketMessage(tournament, petNameByUserId))
+      .setDescription(formatBracketMessage(tournament, petNameByPetId))
       .addFields(
         {
           name: "우승",
@@ -302,24 +308,28 @@ async function runTournament(guildId, client) {
 
   clearScheduledTournament(guildId);
 
-  const petsByUserId = new Map();
+  // One entrant per registered pet (not per user) - entrantId is the pet's
+  // own _id so two pets owned by the same user stay distinct throughout the
+  // bracket. petId pins the exact pet chosen at registration (see
+  // registerParticipant) so battles use that pet even if the owner touches
+  // other slots later. Falls back to slot lookup for participant records
+  // from before petId existed (a tournament mid-cycle when that shipped).
+  const entrants = [];
   for (const p of tournament.participants) {
-    // petId pins the exact pet chosen at registration (see registerParticipant)
-    // so battles use that pet even if the owner touches other slots later.
-    // Falls back to slot lookup for participant records from before petId
-    // existed (a tournament mid-cycle when this shipped).
     const pet = p.petId ? await Pet.findById(p.petId) : await getPet(guildId, p.userId, p.slot ?? 1);
-    if (pet) petsByUserId.set(p.userId, pet);
+    // Participants who released their pet after registering (rare) can't
+    // battle - skipped here, which excludes them from the bracket while
+    // still being covered by whatever refund/skip handling below applies.
+    if (!pet) continue;
+    const entrantId = p.petId ? String(p.petId) : `${p.userId}:${p.slot ?? 1}`;
+    entrants.push({ entrantId, userId: p.userId, username: p.username, pet });
   }
-  // Participants who released their pet after registering (rare) can't battle -
-  // they're excluded from the bracket but keep whatever refund/skip handling
-  // below applies to the whole round.
-  const activeParticipants = tournament.participants.filter((p) => petsByUserId.has(p.userId));
+  const entrantById = new Map(entrants.map((e) => [e.entrantId, e]));
   // Always the species name (파이리), never a user-given nickname (귀염이) -
   // the bracket is meant to read as "유저(종)", not show off custom names.
-  const petNameByUserId = new Map([...petsByUserId.entries()].map(([userId, pet]) => [userId, pet.speciesName]));
+  const petNameByPetId = new Map(entrants.map((e) => [String(e.pet._id), e.pet.speciesName]));
 
-  if (activeParticipants.length < MIN_PARTICIPANTS) {
+  if (entrants.length < MIN_PARTICIPANTS) {
     for (const p of tournament.participants) {
       await addPoints(guildId, { id: p.userId, username: p.username }, ENTRY_FEE);
     }
@@ -327,19 +337,19 @@ async function runTournament(guildId, client) {
     tournament.resolvedAt = new Date();
     await tournament.save();
 
-    await announceSkip(guildId, client, activeParticipants.length);
+    await announceSkip(guildId, client, entrants.length);
     await openNextCycle(guildId, client);
     return;
   }
 
-  for (const pet of petsByUserId.values()) {
-    await ensureBattleStats(pet);
+  for (const e of entrants) {
+    await ensureBattleStats(e.pet);
   }
 
   const bracket = [];
-  let currentEntrants = activeParticipants.map((p) => ({ userId: p.userId, username: p.username }));
+  let currentEntrants = entrants.map((e) => ({ entrantId: e.entrantId, userId: e.userId, username: e.username }));
   let round = 1;
-  let finalLoserUserId = null;
+  let finalLoserEntrant = null;
 
   while (currentEntrants.length > 1) {
     const isFinalRound = currentEntrants.length === 2;
@@ -349,48 +359,61 @@ async function runTournament(guildId, client) {
     const winners = [];
 
     for (const m of matchDefs) {
+      const p1 = entrantById.get(m.player1.entrantId);
       if (m.isBye) {
-        resolvedMatches.push(m);
-        winners.push(m.player1UserId);
+        resolvedMatches.push({
+          player1UserId: p1.userId,
+          player1PetId: p1.pet._id,
+          winnerUserId: p1.userId,
+          winnerPetId: p1.pet._id,
+          isBye: true,
+        });
+        winners.push(m.player1);
         continue;
       }
 
-      const petA = petsByUserId.get(m.player1UserId);
-      const petB = petsByUserId.get(m.player2UserId);
-      const { winnerUserId, rounds: rollResults } = await resolveMatch(petA, petB, isFinalRound);
-      resolvedMatches.push({ ...m, winnerUserId, rounds: rollResults });
-      winners.push(winnerUserId);
+      const p2 = entrantById.get(m.player2.entrantId);
+      const { winnerSide, rounds: rollResults } = await resolveMatch(p1.pet, p2.pet, isFinalRound);
+      const winnerEntrant = winnerSide === "A" ? m.player1 : m.player2;
+      const loserEntrant = winnerSide === "A" ? m.player2 : m.player1;
+      const winnerPetDoc = entrantById.get(winnerEntrant.entrantId).pet;
 
-      if (isFinalRound) {
-        finalLoserUserId = winnerUserId === m.player1UserId ? m.player2UserId : m.player1UserId;
-      }
+      resolvedMatches.push({
+        player1UserId: p1.userId,
+        player2UserId: p2.userId,
+        player1PetId: p1.pet._id,
+        player2PetId: p2.pet._id,
+        winnerUserId: winnerEntrant.userId,
+        winnerPetId: winnerPetDoc._id,
+        isBye: false,
+        rounds: rollResults,
+      });
+      winners.push(winnerEntrant);
+
+      if (isFinalRound) finalLoserEntrant = loserEntrant;
     }
 
     bracket.push({ round, matches: resolvedMatches });
-    currentEntrants = winners.map((userId) => ({
-      userId,
-      username: tournament.participants.find((p) => p.userId === userId)?.username,
-    }));
+    currentEntrants = winners;
     round += 1;
   }
 
-  const winnerId = currentEntrants[0].userId;
-  const winnerPet = petsByUserId.get(winnerId);
-  const runnerUpPet = petsByUserId.get(finalLoserUserId);
+  const winnerEntrant = currentEntrants[0];
+  const winnerPet = entrantById.get(winnerEntrant.entrantId).pet;
+  const runnerUpPet = entrantById.get(finalLoserEntrant.entrantId).pet;
 
   const bonusFromBank = await sweepPetTournamentBonusBank(guildId);
-  const pot = activeParticipants.length * ENTRY_FEE + bonusFromBank;
+  const pot = entrants.length * ENTRY_FEE + bonusFromBank;
   const houseCut = Math.round(pot * (HOUSE_CUT_PERCENT / 100));
   const distributable = pot - houseCut;
   const winnerPayout = Math.round(distributable * WINNER_SHARE);
   const runnerUpPayout = distributable - winnerPayout; // remainder, not a second independent round - keeps the two shares summing exactly to distributable
 
-  await addPoints(guildId, { id: winnerId, username: tournament.participants.find((p) => p.userId === winnerId)?.username }, winnerPayout);
-  await addPoints(
-    guildId,
-    { id: finalLoserUserId, username: tournament.participants.find((p) => p.userId === finalLoserUserId)?.username },
-    runnerUpPayout
-  );
+  // Same owner can win AND place runner-up with two different pets - both
+  // payouts still land on that one real account, which is correct (addPoints
+  // just adds twice to the same balance).
+  await addPoints(guildId, { id: winnerEntrant.userId, username: winnerEntrant.username }, winnerPayout);
+  await addPoints(guildId, { id: finalLoserEntrant.userId, username: finalLoserEntrant.username }, runnerUpPayout);
   await addToHouseBank(guildId, houseCut);
 
   winnerPet.tournamentWins += 1;
@@ -400,9 +423,11 @@ async function runTournament(guildId, client) {
 
   tournament.status = "COMPLETED";
   tournament.bracket = bracket;
-  tournament.winnerId = winnerId;
+  tournament.winnerId = winnerEntrant.userId;
+  tournament.winnerPetId = winnerPet._id;
   tournament.winnerPetName = winnerPet.speciesName;
-  tournament.runnerUpId = finalLoserUserId;
+  tournament.runnerUpId = finalLoserEntrant.userId;
+  tournament.runnerUpPetId = runnerUpPet._id;
   tournament.runnerUpPetName = runnerUpPet.speciesName;
   tournament.pot = pot;
   tournament.houseCut = houseCut;
@@ -411,7 +436,7 @@ async function runTournament(guildId, client) {
   tournament.resolvedAt = new Date();
   await tournament.save();
 
-  await announceResult(guildId, client, tournament, petNameByUserId);
+  await announceResult(guildId, client, tournament, petNameByPetId);
   await openNextCycle(guildId, client);
 }
 

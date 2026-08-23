@@ -80,7 +80,9 @@ function effectiveResist(defender, handicap) {
 // just "who came out ahead this exchange" (a full turn-based sim was tested
 // and rejected - more turns made the stronger pet win MORE reliably, not
 // less, since per-turn variance averages out over many turns instead of
-// mattering once). Returns the winning pet's userId.
+// mattering once). Returns "A" or "B" rather than a userId - a single owner
+// can now enter multiple pets (see /펫대전 신청), so two entrants can share
+// the same userId and a userId wouldn't tell the caller which one won.
 async function resolveSingleRound(petA, petB) {
   const [handicapA, handicapB] = computeHandicaps(petA, petB);
 
@@ -94,18 +96,19 @@ async function resolveSingleRound(petA, petB) {
   const marginA = powerA - resistB;
   const marginB = powerB - resistA;
 
-  if (marginA === marginB) return Math.random() < 0.5 ? petA.userId : petB.userId;
-  return marginA > marginB ? petA.userId : petB.userId;
+  if (marginA === marginB) return Math.random() < 0.5 ? "A" : "B";
+  return marginA > marginB ? "A" : "B";
 }
 
 // isFinal rounds are best-of-3 (first to 2 wins); everything else is a single
-// roll. Returns { winnerUserId, rounds } where rounds is the per-roll winner
-// list (length 1 outside the final, up to 3 in the final) for the bracket
-// embed to show "1R 승 / 2R 패 / 3R 승"-style detail.
+// roll. Returns { winnerSide, rounds } where winnerSide/rounds entries are
+// "A" (petA) or "B" (petB) - the caller maps that back to whichever entrant
+// it put in the A/B slot. rounds is the per-roll list (length 1 outside the
+// final, up to 3 in the final) for the bracket embed's "1R 승 / 2R 패" detail.
 async function resolveMatch(petA, petB, isFinal) {
   if (!isFinal) {
-    const winnerUserId = await resolveSingleRound(petA, petB);
-    return { winnerUserId, rounds: [winnerUserId] };
+    const winnerSide = await resolveSingleRound(petA, petB);
+    return { winnerSide, rounds: [winnerSide] };
   }
 
   const rounds = [];
@@ -114,11 +117,11 @@ async function resolveMatch(petA, petB, isFinal) {
   while (winsA < 2 && winsB < 2) {
     const roundWinner = await resolveSingleRound(petA, petB);
     rounds.push(roundWinner);
-    if (roundWinner === petA.userId) winsA += 1;
+    if (roundWinner === "A") winsA += 1;
     else winsB += 1;
   }
 
-  return { winnerUserId: winsA > winsB ? petA.userId : petB.userId, rounds };
+  return { winnerSide: winsA > winsB ? "A" : "B", rounds };
 }
 
 module.exports = { ensureBattleStats, resolveMatch };
