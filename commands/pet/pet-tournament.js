@@ -99,14 +99,16 @@ async function handleChannelSet(interaction) {
 }
 
 async function handleRegister(interaction) {
+  let pet;
   try {
-    await registerParticipant(interaction.guild.id, interaction.user, interaction.options.getInteger("슬롯"));
+    ({ pet } = await registerParticipant(interaction.guild.id, interaction.user, interaction.options.getInteger("슬롯")));
   } catch (err) {
     return interaction.reply({ content: err.message, ephemeral: true });
   }
 
+  const petLabel = pet.nickname ? `${pet.nickname}(${pet.speciesName})` : pet.speciesName;
   await interaction.reply(
-    `🎫 이 펫으로 이번 주 펫 토너먼트에 신청했습니다! (참가비 ${ENTRY_FEE.toLocaleString()} 포인트 차감) 금요일 밤 11시 30분(미국 동부시간)에 자동으로 진행됩니다. ` +
+    `🎫 ${petLabel}(${pet.slot}번 슬롯)로 이번 주 펫 토너먼트에 신청했습니다! (참가비 ${ENTRY_FEE.toLocaleString()} 포인트 차감) 금요일 밤 11시 30분(미국 동부시간)에 자동으로 진행됩니다. ` +
       `다른 슬롯의 펫도 \`/펫대전 신청\`으로 추가 등록할 수 있어요.`
   );
 

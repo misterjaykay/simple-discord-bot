@@ -138,7 +138,7 @@ async function registerParticipant(guildId, user, slot) {
   await addPoints(guildId, user, -ENTRY_FEE);
   tournament.participants.push({ userId: user.id, username: user.username, petId: pet._id, slot });
   await tournament.save();
-  return tournament;
+  return { tournament, pet };
 }
 
 function shuffle(array) {
