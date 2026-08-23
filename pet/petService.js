@@ -74,12 +74,14 @@ const ALBA_TYPE_JOB_WEIGHT = 45;
 const ALBA_REWARD_MIN = 45;
 const ALBA_REWARD_MAX = 75;
 
-// Only rollable when pickJob() lands on the pet's OWN type job (45% of the
-// time, see ALBA_TYPE_JOB_WEIGHT) - 45% * 20% = 9% of all /펫알바 runs, often
-// enough to feel real without cheapening what "own-type job" already means.
+// Only rollable when pickJob() lands on the pet's OWN type job (see
+// ALBA_TYPE_JOB_WEIGHT) - expressed as a share of ALL /펫알바 runs (not just
+// type-match ones) so the intent stays correct even if ALBA_TYPE_JOB_WEIGHT
+// gets rebalanced later; the conditional roll chance is derived from it below.
 // Multiplier (not a flat bonus) so it keeps scaling correctly if
-// ALBA_REWARD_MIN/MAX ever get rebalanced.
-const ALBA_GREAT_SUCCESS_CHANCE = 0.2;
+// ALBA_REWARD_MIN/MAX ever get rebalanced too.
+const ALBA_GREAT_SUCCESS_OVERALL_CHANCE = 0.12;
+const ALBA_GREAT_SUCCESS_CHANCE = ALBA_GREAT_SUCCESS_OVERALL_CHANCE / (ALBA_TYPE_JOB_WEIGHT / 100);
 const ALBA_GREAT_SUCCESS_MULTIPLIER = 1.5;
 
 // Dispatch (/펫파견) trades away the daily roll's upside and the "show up and
