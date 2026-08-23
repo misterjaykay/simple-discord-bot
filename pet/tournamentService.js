@@ -7,6 +7,7 @@ const { addToHouseBank } = require("../points/houseBankService");
 const { sweepPetTournamentBonusBank, getPetTournamentBonusBank } = require("../points/petTournamentBonusBankService");
 const { getPet } = require("./petService");
 const { ensureBattleStats, resolveMatch } = require("./battleService");
+const { announceTournamentRecap } = require("./petChatterService");
 
 // Points economy note: mirrors the draw-style lottery (points/lotteryDrawService.js)
 // as closely as possible - same weekly-recurring-cycle shape, same house-cut-
@@ -437,6 +438,9 @@ async function runTournament(guildId, client) {
   await tournament.save();
 
   await announceResult(guildId, client, tournament, petNameByPetId);
+  await announceTournamentRecap(client, guildId, winnerPet, runnerUpPet).catch((err) =>
+    console.error("[pet-chatter] tournament recap failed:", err.message)
+  );
   await openNextCycle(guildId, client);
 }
 
