@@ -41,8 +41,9 @@ module.exports = {
     }
 
     const displayName = result.pet.nickname ?? result.pet.speciesName;
+    const successPrefix = result.greatSuccess ? "🌟 대성공! " : "";
     await interaction.reply(
-      `💼 ${displayName}가(이) [${result.job.name}] 알바를 다녀왔어요! ${result.job.flavor}. **+${result.reward}P** 획득!`
+      `💼 ${successPrefix}${displayName}가(이) [${result.job.name}] 알바를 다녀왔어요! ${result.job.flavor}. **+${result.reward}P** 획득!`
     );
     await sendMissionFollowUp(interaction, result.missionResult);
   },

@@ -74,6 +74,16 @@ const ALBA_TYPE_JOB_WEIGHT = 45;
 const ALBA_REWARD_MIN = 45;
 const ALBA_REWARD_MAX = 75;
 
+// Only rollable when pickJob() lands on the pet's OWN type job (see
+// ALBA_TYPE_JOB_WEIGHT) - expressed as a share of ALL /펫알바 runs (not just
+// type-match ones) so the intent stays correct even if ALBA_TYPE_JOB_WEIGHT
+// gets rebalanced later; the conditional roll chance is derived from it below.
+// Multiplier (not a flat bonus) so it keeps scaling correctly if
+// ALBA_REWARD_MIN/MAX ever get rebalanced too.
+const ALBA_GREAT_SUCCESS_OVERALL_CHANCE = 0.12;
+const ALBA_GREAT_SUCCESS_CHANCE = ALBA_GREAT_SUCCESS_OVERALL_CHANCE / (ALBA_TYPE_JOB_WEIGHT / 100);
+const ALBA_GREAT_SUCCESS_MULTIPLIER = 1.5;
+
 // Dispatch (/펫파견) trades away the daily roll's upside and the "show up and
 // see what happens" fun for a flat guaranteed payout you don't have to log in
 // for - priced below manual alba's average so parking every pet on permanent
@@ -84,24 +94,26 @@ const DISPATCH_DURATIONS = [3, 5, 7];
 const DISPATCH_DAILY_RATE = Math.round(((ALBA_REWARD_MIN + ALBA_REWARD_MAX) / 2) * DISPATCH_DISCOUNT);
 
 // Weighted-random job for this pet's daily /펫알바 draw - see ALBA_TYPE_JOB_WEIGHT.
+// Returns isTypeMatch too (candidate.job.name won't tell you whether GENERIC_JOBS
+// happened to share a matched job's name) so doAlba knows when a 대성공 roll applies.
 function pickJob(pet) {
   const matchedJobs = [...new Set(pet.types)].map((t) => JOB_POOL[t]).filter(Boolean);
 
   const candidates = [];
   if (matchedJobs.length > 0) {
     const perTypeWeight = ALBA_TYPE_JOB_WEIGHT / matchedJobs.length;
-    for (const job of matchedJobs) candidates.push({ job, weight: perTypeWeight });
+    for (const job of matchedJobs) candidates.push({ job, isTypeMatch: true, weight: perTypeWeight });
   }
   const genericWeight = (100 - (matchedJobs.length > 0 ? ALBA_TYPE_JOB_WEIGHT : 0)) / GENERIC_JOBS.length;
-  for (const job of GENERIC_JOBS) candidates.push({ job, weight: genericWeight });
+  for (const job of GENERIC_JOBS) candidates.push({ job, isTypeMatch: false, weight: genericWeight });
 
   const totalWeight = candidates.reduce((sum, c) => sum + c.weight, 0);
   let roll = Math.random() * totalWeight;
   for (const candidate of candidates) {
     roll -= candidate.weight;
-    if (roll <= 0) return candidate.job;
+    if (roll <= 0) return candidate;
   }
-  return candidates[candidates.length - 1].job;
+  return candidates[candidates.length - 1];
 }
 
 function randomAlbaReward() {
@@ -505,15 +517,17 @@ async function doAlba(guildId, user, requestedSlot) {
   if (!isAlbaAvailableToday(pet)) return { ok: false, reason: "daily-limit" };
 
   await ensureBattleStats(pet); // backfills pet.types for pets older than /펫대전
-  const job = pickJob(pet);
-  const reward = randomAlbaReward();
+  const { job, isTypeMatch } = pickJob(pet);
+  let reward = randomAlbaReward();
+  const greatSuccess = isTypeMatch && Math.random() < ALBA_GREAT_SUCCESS_CHANCE;
+  if (greatSuccess) reward = Math.round(reward * ALBA_GREAT_SUCCESS_MULTIPLIER);
 
   await addPoints(guildId, user, reward);
   pet.albaDate = todayString();
   await pet.save();
 
   const missionResult = await missionService.recordAction(guildId, user, "alba");
-  return { ok: true, pet, job, reward, missionResult };
+  return { ok: true, pet, job, reward, greatSuccess, missionResult };
 }
 
 // Multi-day auto dispatch - guaranteed payout charged up front (see
