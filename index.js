@@ -17,6 +17,7 @@ const { rearmScheduledDraws } = require("./points/lotteryDrawService");
 const { rearmScheduledTournaments } = require("./pet/tournamentService");
 const { awardChatPoints } = require("./points/chatPointsService");
 const { startBirthdayCheckInterval } = require("./birthday/birthdayPointsService");
+const { startPetChatterInterval, handleVoiceGreet } = require("./pet/petChatterService");
 const { handleWordleResultsMessage } = require("./wordle/wordlePointsService");
 const { refreshMessageLogGuildCache } = require("./logging/logConfigService");
 const { logVoiceStateChange } = require("./logging/voiceLogHandler");
@@ -132,6 +133,7 @@ client.once(Events.ClientReady, (c) => {
     startVoicePointsInterval(c);
     rearmVoiceEventReverts().catch((err) => console.error("[points] rearm voice events failed:", err));
     startBirthdayCheckInterval(c);
+    startPetChatterInterval(c);
     // Re-arm any pending weekly /복권 추첨 draws (see commands/lottery.js) that
     // were scheduled when the process last stopped.
     rearmScheduledDraws(c).catch((err) => console.error("[lottery] rearm failed:", err));
@@ -153,6 +155,9 @@ client.once(Events.ClientReady, (c) => {
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   handleVoiceStateUpdate(oldState, newState).catch((err) => console.error("voiceStateUpdate handler error:", err));
   logVoiceStateChange(oldState, newState).catch((err) => console.error("[logging] voiceStateUpdate error:", err.message));
+  if (process.env.MONGODB_URI) {
+    handleVoiceGreet(oldState, newState).catch((err) => console.error("[pet-chatter] voice greet error:", err.message));
+  }
 });
 
 client.on(Events.MessageCreate, (message) => {

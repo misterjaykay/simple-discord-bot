@@ -126,6 +126,29 @@ const petSchema = new Schema({
     type: Date,
     default: Date.now,
   },
+  // Ambient pet-chatter dedup bookkeeping (see pet/petChatterService.js) -
+  // each is a "don't re-fire this category" cooldown marker, not a live
+  // stat. The underlying condition (lastFedAt, albaDate, level, ...) is
+  // re-derived fresh every sweep, so these never need explicit clearing -
+  // once the real condition stops matching, the category just stops firing.
+  chatterDispatchReturnUntil: {
+    type: Date, // last pet.dispatchUntil value already announced as "returned"
+  },
+  chatterNeglectAt: {
+    type: Date, // last feed/play-neglect nag sent
+  },
+  chatterAlbaNeglectAt: {
+    type: Date, // last alba-neglect nag sent
+  },
+  chatterEvolutionAt: {
+    type: Date, // last evolution-nudge (임박 or 가능) sent
+  },
+  chatterBirthdayYear: {
+    type: Number, // UTC year the owner's birthday chatter last fired
+  },
+  chatterVoiceGreetDate: {
+    type: String, // todayString() of the last voice-channel-join greeting
+  },
 });
 
 petSchema.index({ guildId: 1, userId: 1, slot: 1 }, { unique: true });
