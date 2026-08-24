@@ -1,28 +1,5 @@
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } = require("@discordjs/voice");
-const ytdl = require("@distube/ytdl-core");
-
-// Without a logged-in session, YouTube frequently responds to ytdl's requests
-// with "Sign in to confirm you're not a bot" (more so from datacenter IPs
-// like Railway's) and playback fails immediately after joining. Setting
-// YOUTUBE_COOKIES (a JSON array of cookie objects exported from a real,
-// logged-in YouTube session - see README for how to get them) works around
-// this. Falls back to an unauthenticated agent, matching today's behavior,
-// when the env var isn't set.
-let ytdlAgent;
-if (process.env.YOUTUBE_COOKIES) {
-  try {
-    const cookies = JSON.parse(process.env.YOUTUBE_COOKIES);
-    if (!Array.isArray(cookies)) throw new Error("YOUTUBE_COOKIES must be a JSON array, got " + typeof cookies);
-    ytdlAgent = ytdl.createAgent(cookies);
-    console.log(`[music] YOUTUBE_COOKIES loaded (${cookies.length} cookies)`);
-  } catch (err) {
-    console.error("[music] YOUTUBE_COOKIES is set but invalid, ignoring it:", err.message);
-    ytdlAgent = ytdl.createAgent();
-  }
-} else {
-  ytdlAgent = ytdl.createAgent();
-  console.warn('[music] YOUTUBE_COOKIES is not set - YouTube may block playback with "Sign in to confirm you\'re not a bot"');
-}
+const { spawn } = require("node:child_process");
 
 // One entry per guild currently playing/queued. Purely in-memory by design -
 // same as the old single-track /재생 behavior, a restart just drops whatever
@@ -32,6 +9,34 @@ const guildStates = new Map();
 function announce(state, message) {
   const channel = state.client.channels.cache.get(state.textChannelId);
   if (channel) channel.send(message).catch(() => {});
+}
+
+// yt-dlp instead of ytdl-core: YouTube's current bot-detection ("Sign in to
+// confirm you're not a bot") blocks ytdl-core even with valid session
+// cookies - it now often wants a browser-derived proof-of-origin token that
+// ytdl-core can't produce. yt-dlp handles this itself and is patched within
+// days whenever YouTube changes something, unlike JS extraction libraries.
+// Streams audio straight to stdout rather than writing a temp file.
+function spawnYtDlp(url) {
+  const proc = spawn("yt-dlp", [url, "-f", "bestaudio", "-o", "-", "--no-playlist", "--quiet", "--no-warnings"]);
+  let stderr = "";
+  proc.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+  proc.on("close", (code) => {
+    if (code !== 0 && code !== null) console.error(`[music] yt-dlp exited with code ${code}: ${stderr.slice(0, 500)}`);
+  });
+  return proc;
+}
+
+function killCurrentProcess(state) {
+  // A skipped/stopped track's yt-dlp process doesn't stop on its own just
+  // because nothing's reading its stdout anymore - it has to be killed
+  // explicitly, or it keeps running in the background wasting resources.
+  if (state.currentProcess && state.currentProcess.exitCode === null) {
+    state.currentProcess.kill();
+  }
+  state.currentProcess = null;
 }
 
 function wirePlayerEvents(guildId, state) {
@@ -55,6 +60,8 @@ async function playNext(guildId) {
   const state = guildStates.get(guildId);
   if (!state) return;
 
+  killCurrentProcess(state);
+
   const track = state.queue.shift();
   if (!track) {
     state.nowPlaying = null;
@@ -65,8 +72,9 @@ async function playNext(guildId) {
 
   state.nowPlaying = track;
   try {
-    const stream = ytdl(track.url, { filter: "audioonly", highWaterMark: 1 << 25, agent: ytdlAgent });
-    const resource = createAudioResource(stream);
+    const proc = spawnYtDlp(track.url);
+    state.currentProcess = proc;
+    const resource = createAudioResource(proc.stdout);
     state.player.play(resource);
   } catch (err) {
     // Same reasoning as the player "error" handler above - surface it instead
@@ -103,7 +111,7 @@ async function enqueue(guild, voiceChannel, textChannelId, track) {
     const player = createAudioPlayer();
     connection.subscribe(player);
 
-    state = { connection, player, queue: [], nowPlaying: null, textChannelId, client: guild.client };
+    state = { connection, player, queue: [], nowPlaying: null, currentProcess: null, textChannelId, client: guild.client };
     guildStates.set(guild.id, state);
     wirePlayerEvents(guild.id, state);
   } else {
@@ -140,6 +148,7 @@ function resume(guildId) {
 function stop(guildId) {
   const state = guildStates.get(guildId);
   if (!state) return false;
+  killCurrentProcess(state);
   state.queue = [];
   state.connection.destroy();
   guildStates.delete(guildId);
