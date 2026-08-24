@@ -1,7 +1,6 @@
-const { SlashCommandBuilder } = require("discord.js");
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, getVoiceConnection, entersState } = require("@discordjs/voice");
-const ytdl = require("@distube/ytdl-core");
+const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const ytSearch = require("yt-search");
+const { enqueue } = require("../../music/musicQueueService");
 
 const isUrl = (str) => {
   try {
@@ -15,7 +14,8 @@ const isUrl = (str) => {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("재생")
-    .setDescription("음성 채널에서 음악을 재생합니다.")
+    .setDescription("음성 채널에서 음악을 재생합니다. (관리자 전용)")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption((opt) => opt.setName("검색어").setDescription("유튜브 링크 또는 검색어").setRequired(true)),
   async execute(interaction) {
     const voiceChannel = interaction.member.voice.channel;
@@ -44,46 +44,17 @@ module.exports = {
       title = video.title;
     }
 
-    let connection = getVoiceConnection(interaction.guild.id);
-    // Only a connection THIS call created should ever be torn down on
-    // failure below - destroying one that was already there (e.g. a song
-    // already playing) would kick the bot out of voice over an unrelated
-    // new song failing to load.
-    let isNewConnection = false;
-    if (!connection) {
-      isNewConnection = true;
-      connection = joinVoiceChannel({
-        channelId: voiceChannel.id,
-        guildId: interaction.guild.id,
-        adapterCreator: interaction.guild.voiceAdapterCreator,
-      });
-      try {
-        await entersState(connection, VoiceConnectionStatus.Ready, 10_000);
-      } catch (err) {
-        connection.destroy();
-        console.error(err);
-        return interaction.editReply("음성 채널에 연결하지 못했습니다.");
-      }
-    }
-
     try {
-      const stream = ytdl(videoUrl, { filter: "audioonly", highWaterMark: 1 << 25 });
-      const resource = createAudioResource(stream);
-      const player = createAudioPlayer();
-
-      player.play(resource);
-      connection.subscribe(player);
-
-      player.once(AudioPlayerStatus.Idle, () => connection.destroy());
-      player.on("error", (err) => {
-        console.error("Audio player error:", err);
-        connection.destroy();
+      const result = await enqueue(interaction.guild, voiceChannel, interaction.channelId, {
+        url: videoUrl,
+        title,
+        requestedBy: interaction.user.id,
       });
-
-      return interaction.editReply(`재생을 시작합니다: **${title}**`);
+      return interaction.editReply(
+        result.started ? `재생을 시작합니다: **${title}**` : `대기열에 추가했습니다: **${title}** (${result.position}번째)`
+      );
     } catch (err) {
       console.error(err);
-      if (isNewConnection) connection.destroy();
       return interaction.editReply("음악을 재생하는 중 오류가 발생했습니다.");
     }
   },
