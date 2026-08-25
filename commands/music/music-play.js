@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const ytSearch = require("yt-search");
 const { enqueue } = require("../../music/musicQueueService");
+const { searchYoutube } = require("../../music/musicSearchService");
 
 const isUrl = (str) => {
   try {
@@ -35,8 +35,13 @@ module.exports = {
     let title = "요청하신 링크";
 
     if (!isUrl(query)) {
-      const searchResult = await ytSearch(query);
-      const video = searchResult.videos?.[0];
+      let video;
+      try {
+        video = await searchYoutube(query);
+      } catch (err) {
+        console.error("[music] search failed:", err.message);
+        return interaction.editReply("검색 중 오류가 발생했습니다.");
+      }
       if (!video) {
         return interaction.editReply("검색 결과를 찾을 수 없습니다.");
       }
