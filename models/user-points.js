@@ -137,10 +137,6 @@ const userPointsSchema = new Schema({
     type: Number,
     default: 0,
   },
-  weeklyTournamentJoined: {
-    type: Boolean,
-    default: false,
-  },
   // Guards the weekly all-5 reward from paying out twice in the same week.
   weeklyMissionClaimedWeekKey: {
     type: String,

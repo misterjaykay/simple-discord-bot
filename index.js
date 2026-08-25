@@ -24,6 +24,7 @@ const { logVoiceStateChange } = require("./logging/voiceLogHandler");
 const { cacheMessage, logMessageUpdate, logMessageDelete } = require("./logging/messageLogHandler");
 const { logMemberAdd, logMemberRemove } = require("./logging/joinLeaveLogHandler");
 const { logChannelCreate, logChannelDelete } = require("./logging/serverLogHandler");
+const { handleReactionAdd, handleReactionRemove } = require("./reactionRoles/reactionRoleService");
 
 // Create a new client instance
 const client = new Client({
@@ -32,14 +33,16 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.DirectMessages,
   ],
-  // Message partials are required for messageUpdate/messageDelete to fire at all
-  // on messages discord.js hasn't cached (e.g. sent before the bot last
-  // restarted) - without this, uncached message edits/deletes are silently
-  // dropped instead of reaching our log handlers.
-  partials: [Partials.Message, Partials.Channel],
+  // Message/Reaction partials are required for messageUpdate/messageDelete and
+  // reactionAdd/reactionRemove to fire at all on messages/reactions discord.js
+  // hasn't cached (e.g. reacting to a message posted before the bot's last
+  // restart, needed for /리액션역할 to work on old messages) - without these,
+  // those events are silently dropped instead of reaching our handlers.
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User],
 });
 
 client.commands = new Collection();
@@ -206,6 +209,16 @@ client.on(Events.ChannelCreate, (channel) => {
 client.on(Events.ChannelDelete, (channel) => {
   if (!process.env.MONGODB_URI) return;
   logChannelDelete(channel).catch((err) => console.error("[logging] channelDelete error:", err.message));
+});
+
+client.on(Events.MessageReactionAdd, (reaction, user) => {
+  if (!process.env.MONGODB_URI) return;
+  handleReactionAdd(reaction, user).catch((err) => console.error("[reaction-role] reactionAdd error:", err.message));
+});
+
+client.on(Events.MessageReactionRemove, (reaction, user) => {
+  if (!process.env.MONGODB_URI) return;
+  handleReactionRemove(reaction, user).catch((err) => console.error("[reaction-role] reactionRemove error:", err.message));
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
