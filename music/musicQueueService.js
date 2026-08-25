@@ -18,7 +18,10 @@ function announce(state, message) {
 // days whenever YouTube changes something, unlike JS extraction libraries.
 // Streams audio straight to stdout rather than writing a temp file.
 function spawnYtDlp(url) {
-  const proc = spawn("yt-dlp", [url, "-f", "bestaudio", "-o", "-", "--no-playlist", "--quiet", "--no-warnings"]);
+  // bestaudio alone 404s on videos with no audio-only stream (common lately) -
+  // /best falls back to a combined video+audio stream, which createAudioResource
+  // still demuxes down to just the audio track just fine.
+  const proc = spawn("yt-dlp", [url, "-f", "bestaudio/best", "-o", "-", "--no-playlist", "--quiet", "--no-warnings"]);
   let stderr = "";
   proc.stderr.on("data", (chunk) => {
     stderr += chunk;
