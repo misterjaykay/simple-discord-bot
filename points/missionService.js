@@ -1,4 +1,5 @@
 const Pet = require("../models/pet");
+const PetTournament = require("../models/pet-tournament");
 const { getOrCreatePoints, todayString } = require("./pointsService");
 
 // 일일미션: 개별 보상 없음(인플레 방지) - 5개 전부 채운 날에만 지급, 연속으로
@@ -43,7 +44,6 @@ function ensureWeekFresh(record) {
   record.weeklyPlayCount = 0;
   record.weeklyAlbaCount = 0;
   record.weeklyLotteryCount = 0;
-  record.weeklyTournamentJoined = false;
   record.weeklyMissionClaimedWeekKey = undefined;
 }
 
@@ -85,23 +85,39 @@ async function tryAwardDailyBonus(guildId, user, record) {
   return { awarded, streak };
 }
 
-function isWeeklyMissionComplete(record) {
+// "참가" is whether the user has a live entry in the guild's currently-open
+// tournament, checked fresh every time rather than a stored per-week flag.
+// A stored flag can't survive a mission-week rollover: registration for a
+// given tournament cycle is only possible ONCE (registerParticipant blocks
+// re-registering the same slot in a still-open tournament), but that cycle
+// runs Friday-to-Friday while the mission week resets Monday - so anyone who
+// registered before the Monday reset would otherwise be unable to ever flip
+// the flag back to true again until that Friday's run finally opens a new
+// registration window, softlocking this mission for days. Deriving it live
+// from "am I still registered in whatever tournament is open right now" has
+// no such gap - it stays true continuously from registration through the run.
+async function isJoinedOpenTournament(guildId, userId) {
+  const tournament = await PetTournament.findOne({ guildId, status: "REGISTRATION" });
+  return !!tournament?.participants.some((p) => p.userId === userId);
+}
+
+function isWeeklyMissionComplete(record, tournamentJoined) {
   return (
     record.weeklyFeedCount >= WEEKLY_TARGETS.feed &&
     record.weeklyPlayCount >= WEEKLY_TARGETS.play &&
     record.weeklyAlbaCount >= WEEKLY_TARGETS.alba &&
     record.weeklyLotteryCount >= WEEKLY_TARGETS.lottery &&
-    record.weeklyTournamentJoined
+    tournamentJoined
   );
 }
 
 // Awards the all-5 weekly bonus once per week - points + a flat (not
 // stacking) exp buff window, same "just overwrite it" reasoning as
 // voicePointsService.setVoiceEventRate.
-async function tryAwardWeeklyBonus(record) {
+async function tryAwardWeeklyBonus(record, tournamentJoined) {
   const key = weekString();
   if (record.weeklyMissionClaimedWeekKey === key) return null;
-  if (!isWeeklyMissionComplete(record)) return null;
+  if (!isWeeklyMissionComplete(record, tournamentJoined)) return null;
 
   record.points += WEEKLY_COMPLETE_POINTS;
   record.expBuffMultiplier = WEEKLY_EXP_BUFF_MULTIPLIER;
@@ -117,16 +133,19 @@ async function tryAwardWeeklyBonus(record) {
 // that action's own save. Bumps the matching weekly counter (if any), then
 // auto-awards the weekly-complete and/or daily-complete bonuses the moment
 // they first become true. Returns { daily, weekly } (either may be null).
+// actionType "tournament" doesn't have a counter to bump - it's here only so
+// registering triggers an immediate bonus check instead of waiting for the
+// next /미션 or daily action (isJoinedOpenTournament covers the rest live).
 async function recordAction(guildId, user, actionType) {
   const record = await getOrCreatePoints(guildId, user);
   ensureWeekFresh(record);
 
   const countField = WEEKLY_COUNT_FIELDS[actionType];
   if (countField) record[countField] += 1;
-  if (actionType === "tournament") record.weeklyTournamentJoined = true;
   await record.save();
 
-  const weekly = await tryAwardWeeklyBonus(record);
+  const tournamentJoined = await isJoinedOpenTournament(guildId, user.id);
+  const weekly = await tryAwardWeeklyBonus(record, tournamentJoined);
   const daily = await tryAwardDailyBonus(guildId, user, record);
 
   return { daily, weekly };
@@ -166,7 +185,7 @@ async function getMissionStatus(guildId, user) {
     play: { count: record.weeklyPlayCount, target: WEEKLY_TARGETS.play },
     alba: { count: record.weeklyAlbaCount, target: WEEKLY_TARGETS.alba },
     lottery: { count: record.weeklyLotteryCount, target: WEEKLY_TARGETS.lottery },
-    tournament: record.weeklyTournamentJoined,
+    tournament: await isJoinedOpenTournament(guildId, user.id),
   };
   const weeklyDone = [
     weekly.feed.count >= weekly.feed.target,
