@@ -5,20 +5,26 @@ const { createSession, getSession } = require("../../pet/adoptSession");
 const { buildPreviewMessage, buildEligibilityFailureMessage } = require("../../pet/adoptView");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
 
+// Built dynamically from GENERATION_GROUPS/ADOPT_COSTS instead of hardcoding
+// each tier, so opening a future generation only means adding an entry to
+// those two objects - this file doesn't need to change again.
+const generationEntries = Object.entries(GENERATION_GROUPS).map(([value, { label }]) => ({ value: Number(value), label }));
+const latestGeneration = Math.max(...generationEntries.map((g) => g.value));
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("펫입양")
-    .setDescription(
-      `포인트를 써서 펫을 입양합니다 (1~3세대 ${ADOPT_COSTS[1]}P / 4~6세대 ${ADOPT_COSTS[2]}P). 마음에 들 때까지 최대 ${MAX_ADOPT_ATTEMPTS}번 다시 뽑을 수 있어요.`
-    )
+    .setDescription(`포인트를 써서 펫을 입양합니다 (세대별 비용은 선택지 참고). 마음에 들 때까지 최대 ${MAX_ADOPT_ATTEMPTS}번 다시 뽑을 수 있어요.`)
     .addIntegerOption((opt) =>
       opt
         .setName("세대")
         .setDescription("입양 풀로 사용할 세대")
         .setRequired(true)
         .addChoices(
-          { name: `${GENERATION_GROUPS[1].label} · ${ADOPT_COSTS[1]}P`, value: 1 },
-          { name: `${GENERATION_GROUPS[2].label} · ${ADOPT_COSTS[2]}P ✨NEW`, value: 2 }
+          ...generationEntries.map((g) => ({
+            name: `${g.label} · ${ADOPT_COSTS[g.value]}P${g.value === latestGeneration ? " ✨NEW" : ""}`,
+            value: g.value,
+          }))
         )
     ),
   async execute(interaction) {

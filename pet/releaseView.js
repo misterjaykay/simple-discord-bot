@@ -1,5 +1,10 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const { ADOPT_COSTS, formatSlotChoices } = require("./petService");
+const { GENERATION_GROUPS } = require("./pokeApiClient");
+
+const adoptCostSummary = Object.entries(ADOPT_COSTS)
+  .map(([gen, cost]) => `${GENERATION_GROUPS[gen].label} ${cost.toLocaleString()}P`)
+  .join(" / ");
 
 // userId + slot are embedded in the customId (no session store needed -
 // unlike the adopt flow, this is a single yes/no with no intermediate state)
@@ -11,7 +16,8 @@ function buildReleaseConfirmMessage(pet, userId) {
     .setImage(pet.spriteUrl)
     .setDescription(
       `Lv.${pet.level}까지 키운 기록이 전부 사라지고, 되돌릴 수 없어요.\n` +
-        `이 슬롯에 새 펫을 입양하려면 \`/펫입양\`으로 포인트(1~3세대 ${ADOPT_COSTS[1].toLocaleString()}P / 4~6세대 ${ADOPT_COSTS[2].toLocaleString()}P)를 다시 내야 해요.`
+        `이 슬롯에 새 펫을 입양하려면 \`/펫입양\`으로 포인트(${adoptCostSummary})를 다시 내야 해요.\n` +
+        `-# 기록을 지우고 싶지 않다면 \`/펫보관\`으로 대신 보관함에 넣어둘 수도 있어요.`
     )
     .setColor(0xed4245);
 

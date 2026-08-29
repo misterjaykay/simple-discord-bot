@@ -12,9 +12,16 @@ const petSchema = new Schema({
     type: String,
     required: true,
   },
+  // Exactly one of slot/storageSlot is set at any time - slot for an active
+  // roster spot (1-3, paid via /펫슬롯), storageSlot for a dormant pet parked
+  // in the free storage box (1-5, see petService.MAX_STORAGE) instead of
+  // being released. Both indexed sparse below so the two numbering spaces
+  // never collide with each other.
   slot: {
     type: Number, // 1-3
-    required: true,
+  },
+  storageSlot: {
+    type: Number, // 1-5
   },
   nickname: {
     type: String,
@@ -151,6 +158,18 @@ const petSchema = new Schema({
   },
 });
 
-petSchema.index({ guildId: 1, userId: 1, slot: 1 }, { unique: true });
+// partialFilterExpression (NOT sparse - sparse on a COMPOUND index only
+// excludes a doc when EVERY indexed field is missing, and guildId/userId are
+// always present here, so a plain `sparse: true` would still index every
+// slot-less stored pet as (guildId, userId, null) and collide with each
+// other; see the real E11000 this threw in local testing before the fix)
+// so a doc is only subject to each index when it actually has that field -
+// active-slot pets and stored pets never collide with each other, and
+// multiple stored pets never collide among themselves either.
+petSchema.index({ guildId: 1, userId: 1, slot: 1 }, { unique: true, partialFilterExpression: { slot: { $exists: true } } });
+petSchema.index(
+  { guildId: 1, userId: 1, storageSlot: 1 },
+  { unique: true, partialFilterExpression: { storageSlot: { $exists: true } } }
+);
 
 module.exports = mongoose.model("Pet", petSchema);

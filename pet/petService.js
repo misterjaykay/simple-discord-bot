@@ -9,11 +9,12 @@ const missionService = require("../points/missionService");
 // Points economy note: chatPointsService/voicePointsService only ever pay
 // points IN - /예측 betting was the only sink so far. These costs give people
 // another reason to spend the points they've been earning.
-// 4-6세대 costs more than 1-3세대 - the price gap is deliberate marketing for
-// the newer pool, not a balance knob (see GENERATION_GROUPS in pokeApiClient.js).
-const ADOPT_COSTS = { 1: 250, 2: 300 };
-const FEED_COST = 40;
-const PLAY_COST = 30;
+// Per-generation adopt price (see GENERATION_GROUPS in pokeApiClient.js) -
+// a balance/marketing knob, not tied 1:1 to how many generations are in each
+// pool.
+const ADOPT_COSTS = { 1: 250, 2: 250, 3: 300 };
+const FEED_COST = 30;
+const PLAY_COST = 25;
 // Higher than feed/play since evolving is a one-off milestone, not a routine
 // action - roughly 2x feed, well above what a single feed/play cycle earns.
 const EVOLVE_COST = 80;
@@ -23,6 +24,14 @@ const EVOLVE_COST = 80;
 // since a 2nd/3rd pet is a bigger economy sink than the first.
 const MAX_SLOTS = 3;
 const SLOT_UNLOCK_COSTS = { 2: 3000, 3: 4000 };
+
+// Free storage box (/펫보관, /펫꺼내기, /펫보관함) - lets an owner park a pet
+// outside the paid active slots instead of releasing it outright. A stored
+// pet is fully inert (no feed/play/level/battle), so it doesn't erode the
+// active slots' value ("how many can I run at once") - it only affects
+// collection size, which was already unlimited in practice via
+// release-and-readopt. No unlock cost, unlike MAX_SLOTS.
+const MAX_STORAGE = 5;
 
 // Half of every feed/play cost funds the weekly /펫대전 prize pool, the other
 // half goes to the shared house bank - neither just vanishes anymore (see
@@ -214,9 +223,17 @@ async function getPet(guildId, userId, slot) {
   return Pet.findOne({ guildId, userId, slot });
 }
 
-// All of a user's pets, slot 1 first. Empty array if they have none.
+// All of a user's ACTIVE (slotted) pets, slot 1 first - excludes anything
+// parked in storage (see getStorage). Empty array if they have none active.
 async function getPets(guildId, userId) {
-  return Pet.find({ guildId, userId }).sort({ slot: 1 });
+  return Pet.find({ guildId, userId, slot: { $exists: true } }).sort({ slot: 1 });
+}
+
+// All of a user's pets parked in storage (see MAX_STORAGE), lowest storageSlot
+// first. Storage is free and available to everyone up to MAX_STORAGE - no
+// unlock step like the paid active slots.
+async function getStorage(guildId, userId) {
+  return Pet.find({ guildId, userId, storageSlot: { $exists: true } }).sort({ storageSlot: 1 });
 }
 
 // How many of MAX_SLOTS this user has paid to unlock (1 if never bought any -
@@ -256,6 +273,67 @@ async function setActiveSlot(guildId, user, slot) {
 // that slot was already empty.
 async function releasePet(guildId, userId, slot) {
   return Pet.findOneAndDelete({ guildId, userId, slot });
+}
+
+// First storage slot (1..MAX_STORAGE) with no pet in it, or null if storage
+// is full.
+async function getNextEmptyStorageSlot(guildId, userId) {
+  const stored = await getStorage(guildId, userId);
+  const occupied = new Set(stored.map((p) => p.storageSlot));
+  for (let s = 1; s <= MAX_STORAGE; s++) {
+    if (!occupied.has(s)) return s;
+  }
+  return null;
+}
+
+// Parks an active-slot pet in storage instead of releasing it - frees that
+// slot up (for a fresh adopt or a different stored pet) without deleting the
+// original. Deliberately only ever touches slot/storageSlot: cooldown/daily-
+// cap fields (lastFedAt, feedsToday, feedsTodayDate, ...) are left exactly as
+// they were, so store->retrieve can't be used to dodge a cooldown or reset a
+// daily cap. Uses findOneAndUpdate with an explicit $unset (not
+// `pet.slot = undefined; pet.save()`, which Mongoose doesn't reliably turn
+// into an actual $unset on the wire) so the old field is really gone, not
+// just undefined in memory.
+async function storePet(guildId, userId, activeSlot) {
+  const pet = await getPet(guildId, userId, activeSlot);
+  if (!pet) return { ok: false, reason: "slot-empty" };
+  if (isDispatched(pet)) return { ok: false, reason: "dispatched" };
+
+  const nextStorageSlot = await getNextEmptyStorageSlot(guildId, userId);
+  if (nextStorageSlot == null) return { ok: false, reason: "storage-full" };
+
+  const updated = await Pet.findOneAndUpdate(
+    { _id: pet._id },
+    { $unset: { slot: 1 }, $set: { storageSlot: nextStorageSlot } },
+    { returnDocument: "after" }
+  );
+  return { ok: true, pet: updated };
+}
+
+// Pulls a stored pet back into an active slot - the target slot defaults to
+// the next open unlocked one (same rule as adopting) unless explicitly given.
+// An explicit target still has to be one of the user's paid-for unlocked
+// slots - otherwise this would let someone bypass /펫슬롯's unlock cost by
+// just naming an unpaid slot number directly.
+async function retrievePet(guildId, user, storageSlot, targetActiveSlot) {
+  const pet = await Pet.findOne({ guildId, userId: user.id, storageSlot });
+  if (!pet) return { ok: false, reason: "storage-empty" };
+
+  let slot = targetActiveSlot;
+  if (slot != null) {
+    const unlockedSlots = await getUnlockedSlots(guildId, user);
+    if (slot > unlockedSlots) return { ok: false, reason: "slot-locked" };
+  } else {
+    slot = await getNextEmptySlot(guildId, user);
+  }
+  if (slot == null) return { ok: false, reason: "slots-full" };
+
+  const occupant = await getPet(guildId, user.id, slot);
+  if (occupant) return { ok: false, reason: "slot-taken" };
+
+  const updated = await Pet.findOneAndUpdate({ _id: pet._id }, { $unset: { storageSlot: 1 }, $set: { slot } }, { returnDocument: "after" });
+  return { ok: true, pet: updated };
 }
 
 // Shared by feed/play/rename/release: resolves which of a user's pets a
@@ -596,6 +674,9 @@ module.exports = {
   setActiveSlot,
   resolvePetForAction,
   releasePet,
+  getStorage,
+  storePet,
+  retrievePet,
   feedPet,
   playWithPet,
   getDisplayStats,
@@ -622,6 +703,7 @@ module.exports = {
   MAX_ADOPT_ATTEMPTS,
   MAX_SLOTS,
   SLOT_UNLOCK_COSTS,
+  MAX_STORAGE,
   ALBA_REWARD_MIN,
   ALBA_REWARD_MAX,
   DISPATCH_DURATIONS,
