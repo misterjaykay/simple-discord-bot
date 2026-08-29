@@ -10,6 +10,7 @@ const axios = require("axios");
 const GENERATION_GROUPS = {
   1: { min: 1, max: 386, label: "1~3세대 (칸토·조호토·호연)" },
   2: { min: 387, max: 721, label: "4~6세대 (신오·하나·칼로스)" },
+  3: { min: 722, max: 905, label: "7~8세대 (알로라·가라르)" },
 };
 
 // How many random species we're willing to try before giving up on finding

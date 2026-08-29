@@ -56,7 +56,13 @@ function buildExpiredMessage() {
 
 function buildEligibilityFailureMessage(reason, cost) {
   if (reason === "slots-full") {
-    return { content: "열려있는 슬롯이 모두 찼어요! `/펫슬롯`으로 슬롯을 더 열어보세요.", embeds: [], components: [] };
+    return {
+      content:
+        "활성 슬롯이 모두 찼어요! 입양은 항상 빈 활성 슬롯이 있어야 가능해요.\n" +
+        "`/펫보관`으로 기존 펫을 보관함에 넣어 슬롯을 비우거나, `/펫슬롯`으로 슬롯을 더 열어보세요.",
+      embeds: [],
+      components: [],
+    };
   }
   const costNote = cost != null ? ` (${cost.toLocaleString()}P 필요해요)` : "";
   return { content: `포인트가 부족해서 확정할 수 없어요.${costNote}`, embeds: [], components: [] };
