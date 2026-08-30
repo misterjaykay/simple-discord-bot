@@ -1,7 +1,16 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { doAlba, formatSlotChoices, dispatchRemainingDays } = require("../../pet/petService");
+const { doAlba, albaAllPets, formatSlotChoices, dispatchRemainingDays } = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
 const { sendMissionFollowUp } = require("../../points/missionService");
+
+// One line per pet /펫알바 전체 couldn't send out, with why - reuses the exact
+// reason codes doAlba already returns for the single-pet command above.
+function skipReasonText(skip) {
+  const name = `${skip.pet.slot}번 ${skip.pet.nickname ?? skip.pet.speciesName}`;
+  if (skip.reason === "dispatched") return `${name} - 파견 중 (복귀까지 약 ${dispatchRemainingDays(skip.pet)}일)`;
+  if (skip.reason === "daily-limit") return `${name} - 오늘 이미 다녀왔어요`;
+  return `${name} - 알바를 보낼 수 없어요`;
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -9,9 +18,31 @@ module.exports = {
     .setDescription("펫을 하루짜리 알바에 보내고 포인트를 법니다. (하루 1회)")
     .addIntegerOption((opt) =>
       opt.setName("슬롯").setDescription("알바를 보낼 펫의 슬롯 (펫이 1마리뿐이면 생략 가능)").setMinValue(1).setMaxValue(3)
-    ),
+    )
+    .addBooleanOption((opt) => opt.setName("전체").setDescription("오늘 알바 가능한 모든 펫을 한 번에 보냅니다")),
   async execute(interaction) {
     if (!(await requirePetChannel(interaction))) return;
+
+    if (interaction.options.getBoolean("전체")) {
+      const result = await albaAllPets(interaction.guild.id, interaction.user);
+      if (!result.ok) {
+        return interaction.reply({ content: "아직 펫이 없어요. `/펫입양`으로 입양해보세요!", ephemeral: true });
+      }
+
+      const lines = [];
+      if (result.succeeded.length > 0) {
+        const totalReward = result.succeeded.reduce((sum, r) => sum + r.reward, 0);
+        const details = result.succeeded
+          .map((r) => `${r.pet.slot}번 ${r.pet.nickname ?? r.pet.speciesName}${r.greatSuccess ? " 🌟" : ""}: [${r.job.name}] +${r.reward}P`)
+          .join("\n");
+        lines.push(`💼 ${result.succeeded.length}마리가 알바를 다녀왔어요! 총 **+${totalReward}P**\n${details}`);
+      }
+      if (result.skipped.length > 0) lines.push(result.skipped.map(skipReasonText).join("\n"));
+      if (lines.length === 0) lines.push("알바를 보낼 수 있는 펫이 없어요.");
+
+      await interaction.reply(lines.join("\n"));
+      return sendMissionFollowUp(interaction, result.missionResult);
+    }
 
     const result = await doAlba(interaction.guild.id, interaction.user, interaction.options.getInteger("슬롯"));
 

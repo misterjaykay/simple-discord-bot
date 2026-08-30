@@ -629,6 +629,78 @@ async function startDispatch(guildId, user, requestedSlot, days) {
   return { ok: true, pet, days, payout };
 }
 
+// Shared shape for the 전체 (bulk) variants below: run the exact same
+// single-pet function once per active pet (in slot order), sorting each
+// outcome into succeeded vs skipped instead of failing the whole call. This
+// deliberately reuses feedPet/playWithPet/doAlba as-is rather than
+// reimplementing their cooldown/cap/dispatched/cost checks, so bulk mode
+// can never drift out of sync with the single-pet rules - and it naturally
+// handles gaps (e.g. 2 pets sitting in 3 unlocked slots, or any other
+// partial-fill shape) since it only ever loops over pets that actually
+// exist (getPets), never over raw slot numbers 1..MAX_SLOTS.
+async function runBulkAction(guildId, user, singlePetAction) {
+  const pets = await getPets(guildId, user.id);
+  if (pets.length === 0) return { ok: false, reason: "no-pet" };
+
+  const succeeded = [];
+  const skipped = [];
+  let missionResult = null;
+  for (const pet of pets) {
+    const result = await singlePetAction(pet.slot);
+    if (result.ok) {
+      succeeded.push(result);
+      if (result.missionResult?.daily || result.missionResult?.weekly) missionResult = result.missionResult;
+    } else {
+      skipped.push({ pet, reason: result.reason, remainingMs: result.remainingMs });
+    }
+  }
+  return { ok: true, succeeded, skipped, missionResult };
+}
+
+async function feedAllPets(guildId, user) {
+  return runBulkAction(guildId, user, (slot) => feedPet(guildId, user, slot));
+}
+
+async function playAllPets(guildId, user) {
+  return runBulkAction(guildId, user, (slot) => playWithPet(guildId, user, slot));
+}
+
+async function albaAllPets(guildId, user) {
+  return runBulkAction(guildId, user, (slot) => doAlba(guildId, user, slot));
+}
+
+// Preview-only (no writes) - which of the user's active pets could be sent on
+// dispatch right now, for the /펫파견 전체 confirm prompt. Recomputed fresh at
+// both preview time and confirm-click time (componentHandler doesn't trust a
+// slot list carried in the button's customId) so a pet dispatched/released by
+// some other action in between can't get double-dispatched or 404 silently.
+async function getDispatchableSlots(guildId, userId) {
+  const pets = await getPets(guildId, userId);
+  return pets.filter((p) => !isDispatched(p));
+}
+
+// Commits bulk dispatch - same reuse-the-single-pet-function pattern as
+// runBulkAction above, called only after the /펫파견 전체 confirm button is
+// clicked (this itself does no confirmation, matching startDispatch).
+async function startDispatchAll(guildId, user, days) {
+  if (!DISPATCH_DURATIONS.includes(days)) return { ok: false, reason: "invalid-duration" };
+
+  const pets = await getPets(guildId, user.id);
+  if (pets.length === 0) return { ok: false, reason: "no-pet" };
+
+  const dispatchable = pets.filter((p) => !isDispatched(p));
+  if (dispatchable.length === 0) return { ok: false, reason: "none-dispatchable" };
+
+  const dispatched = [];
+  const skipped = [];
+  for (const pet of dispatchable) {
+    const result = await startDispatch(guildId, user, pet.slot, days);
+    if (result.ok) dispatched.push(result);
+    else skipped.push({ pet, reason: result.reason });
+  }
+  return { ok: true, dispatched, skipped };
+}
+
 // "1번 파이리(Lv.5), 2번 꼬부기(Lv.3)" - used when a slot-less action command
 // (feed/play/rename/release) is ambiguous across a user's multiple pets, so
 // the reply can list what to pick from.
@@ -679,6 +751,11 @@ module.exports = {
   retrievePet,
   feedPet,
   playWithPet,
+  feedAllPets,
+  playAllPets,
+  albaAllPets,
+  getDispatchableSlots,
+  startDispatchAll,
   getDisplayStats,
   formatSlotChoices,
   unlockNextSlot,
