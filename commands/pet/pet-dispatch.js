@@ -1,7 +1,14 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { resolvePetForAction, formatSlotChoices, isDispatched, dispatchRemainingDays, DISPATCH_DURATIONS } = require("../../pet/petService");
+const {
+  resolvePetForAction,
+  getDispatchableSlots,
+  formatSlotChoices,
+  isDispatched,
+  dispatchRemainingDays,
+  DISPATCH_DURATIONS,
+} = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
-const { buildDispatchConfirmMessage } = require("../../pet/dispatchView");
+const { buildDispatchConfirmMessage, buildDispatchAllConfirmMessage, buildNoDispatchableMessage } = require("../../pet/dispatchView");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -16,11 +23,23 @@ module.exports = {
     )
     .addIntegerOption((opt) =>
       opt.setName("슬롯").setDescription("파견 보낼 펫의 슬롯 (펫이 1마리뿐이면 생략 가능)").setMinValue(1).setMaxValue(3)
+    )
+    .addBooleanOption((opt) =>
+      opt.setName("전체").setDescription("파견 보낼 수 있는 모든 펫을 한 번에 보냅니다 (같은 기간, 확인 후 진행)")
     ),
   async execute(interaction) {
     if (!(await requirePetChannel(interaction))) return;
 
     const days = interaction.options.getInteger("기간", true);
+
+    if (interaction.options.getBoolean("전체")) {
+      const dispatchable = await getDispatchableSlots(interaction.guild.id, interaction.user.id);
+      if (dispatchable.length === 0) {
+        return interaction.reply({ ...buildNoDispatchableMessage(), ephemeral: true });
+      }
+      return interaction.reply({ ...buildDispatchAllConfirmMessage(dispatchable, interaction.user.id, days), ephemeral: true });
+    }
+
     const resolved = await resolvePetForAction(interaction.guild.id, interaction.user, interaction.options.getInteger("슬롯"));
 
     if (!resolved.ok) {

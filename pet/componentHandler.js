@@ -7,6 +7,7 @@ const {
   setActiveSlot,
   evolvePet,
   startDispatch,
+  startDispatchAll,
   getPets,
   getUnlockedSlots,
   getActiveSlot,
@@ -25,6 +26,8 @@ const { buildEvolvedMessage, buildEvolveFailureMessage } = require("./evolveView
 const { removeParticipantIfRegistered } = require("./tournamentService");
 const {
   buildDispatchedMessage,
+  buildDispatchAllResultMessage,
+  buildNoDispatchableMessage,
   buildDispatchCancelledMessage,
   buildDispatchFailureMessage,
 } = require("./dispatchView");
@@ -154,6 +157,30 @@ async function handlePetComponent(interaction) {
       return interaction.update(buildDispatchFailureMessage(result.reason));
     }
     return interaction.update(buildDispatchedMessage(result));
+  }
+
+  // Bulk dispatch - unlike the single-pet version above, this re-resolves
+  // "which pets are still dispatchable" fresh at click time (startDispatchAll
+  // does its own getPets/isDispatched check) rather than trusting anything
+  // carried in the customId, so a pet that got dispatched/released by some
+  // other action between the confirm prompt and this click is silently
+  // excluded instead of double-acted on or crashing.
+  if (action === "dispatchAllConfirm" || action === "dispatchAllCancel") {
+    const ownerUserId = sessionId;
+    if (interaction.user.id !== ownerUserId) {
+      return interaction.reply({ content: "본인이 실행한 파견만 조작할 수 있어요.", ephemeral: true });
+    }
+
+    if (action === "dispatchAllCancel") {
+      return interaction.update(buildDispatchCancelledMessage());
+    }
+
+    const days = Number(extra);
+    const result = await startDispatchAll(interaction.guild.id, interaction.user, days);
+    if (!result.ok) {
+      return interaction.update(buildNoDispatchableMessage());
+    }
+    return interaction.update(buildDispatchAllResultMessage(result));
   }
 
   const session = getSession(sessionId);
