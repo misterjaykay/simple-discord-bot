@@ -180,10 +180,28 @@ async function getFollowingEvolution(speciesId) {
   return { options, minLevel, rare: !sameLevel };
 }
 
-// A species is adoptable as a starting pet only if it's a first stage
-// (nothing evolves into it) AND has some evolution ahead of it - this is
-// "1차 포켓몬 중 진화 가능한 것만", with rare (stone/trade/friendship-only)
-// lines like Eevee allowed in but flagged so the caller can make them uncommon.
+// Non-legendary/mythical species that never evolve at all (Ditto, Tauros,
+// Mimikyu, ...) are otherwise allowed into the adopt pool for variety (see
+// getEligibleBaseSpecies below), EXCEPT this curated exception list:
+//  - the 9 Ultra Beasts (793-799, 805, 806): PokeAPI doesn't flag them
+//    is_legendary/is_mythical, but they're story-boss-tier in the actual
+//    games, and a direct baseAttack+baseDefense check confirmed they're
+//    literally the 3 highest-stat single-stage species in the entire 1-8세대
+//    range (Stakataka 342, Kartana 312, Buzzwole 278 vs a ~167 pool average) -
+//    letting them in at ordinary odds would make them the best possible draw
+//    in the game.
+//  - Shuckle (213): not an Ultra Beast, but the same stat check flagged it as
+//    another top-3 outlier (10/230 atk/def split, sum 240) purely from a
+//    near-maxed defense stat.
+const EXCLUDED_FINAL_FORM_IDS = new Set([213, 793, 794, 795, 796, 797, 798, 799, 805, 806]);
+
+// A species is adoptable as a starting pet if it's a first stage (nothing
+// evolves into it) - normally it also needs an evolution ahead of it ("1차
+// 포켓몬 중 진화 가능한 것만"), with rare (stone/trade/friendship-only) lines
+// like Eevee allowed in but flagged so the caller can make them uncommon. A
+// species with NO evolution at all is let in too unless it's in
+// EXCLUDED_FINAL_FORM_IDS above - those adopt as permanent final forms
+// (/펫정보 already renders "더 이상 진화하지 않아요" for this shape of pet).
 async function getEligibleBaseSpecies(id) {
   const raw = await getRawSpecies(id);
   if (raw.evolves_from_species) return null; // not a first-stage species
@@ -194,7 +212,10 @@ async function getEligibleBaseSpecies(id) {
   // slip into the adopt pool as a "base-stage" species.
   if (raw.is_legendary || raw.is_mythical) return null;
 
-  return getFollowingEvolution(id);
+  const evolution = await getFollowingEvolution(id);
+  if (evolution) return evolution;
+  if (EXCLUDED_FINAL_FORM_IDS.has(id)) return null;
+  return { options: [], minLevel: null, rare: false };
 }
 
 async function getRandomEvolvableBaseSpecies(generationGroup) {
