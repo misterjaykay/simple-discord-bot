@@ -169,7 +169,9 @@ async function runSweep(client) {
   );
 
   for (const config of configs) {
-    const pets = await Pet.find({ guildId: config.guildId, level: { $gte: MIN_LEVEL } });
+    // slot: {$exists: true} excludes pets parked in storage (/펫보관) - only
+    // active-slot pets should chatter, same rule petService.getPets applies.
+    const pets = await Pet.find({ guildId: config.guildId, level: { $gte: MIN_LEVEL }, slot: { $exists: true } });
     for (const pet of pets) {
       await checkAndFireForPet(client, pet, birthdayUserIds).catch((err) =>
         console.error(`[pet-chatter] check failed for pet ${pet._id}:`, err.message)
@@ -203,7 +205,7 @@ async function handleVoiceGreet(oldState, newState) {
 
   const today = todayString();
 
-  const pets = await Pet.find({ guildId, userId: newState.member.id, level: { $gte: MIN_LEVEL } });
+  const pets = await Pet.find({ guildId, userId: newState.member.id, level: { $gte: MIN_LEVEL }, slot: { $exists: true } });
   const pet = pets.find((p) => p.chatterVoiceGreetDate !== today);
   if (!pet) return;
 
@@ -232,6 +234,7 @@ async function announceTournamentRecap(client, guildId, winnerPet, runnerUpPet) 
   const pastChamps = await Pet.find({
     guildId,
     level: { $gte: MIN_LEVEL },
+    slot: { $exists: true },
     _id: { $nin: [winnerPet._id, runnerUpPet._id] },
     $or: [{ tournamentWins: { $gt: 0 } }, { tournamentRunnerUps: { $gt: 0 } }],
   });
