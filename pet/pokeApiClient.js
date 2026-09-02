@@ -19,12 +19,18 @@ const GENERATION_GROUPS = {
 // no way to fulfill those). Comfortably above what's needed in practice.
 const MAX_ADOPT_ATTEMPTS = 50;
 
-// Species like Eevee only evolve via stone/trade/friendship in the real
-// games (no plain level-up trigger at all) - this bot has no such mechanic,
-// so they get a synthetic "reach this level" requirement instead. Also used
+// Species like Eevee only evolve via stone/trade/friendship in the real games
+// (no plain level-up trigger at all) - this bot has no such mechanic, so they
+// get a synthetic "reach current level + N" requirement instead. Also used
 // whenever a branch's siblings disagree on their real level-up number (see
-// getFollowingEvolution).
-const RARE_EVOLUTION_LEVEL = 20;
+// getFollowingEvolution). Relative to the CURRENT stage's level rather than a
+// flat number - a flat "reach level 20" broke mid-chain stone evolutions
+// whose earlier real level-up gate already exceeded 20 (Honedge -> Doublade
+// needs level 35, so a flat 20 for Doublade -> Aegislash's Dusk Stone step
+// was already satisfied the instant Doublade was reached, evolving it for
+// free with zero extra grinding). +19 keeps a freshly-adopted (Lv.1) base
+// species' first rare evolution at the same Lv.20 this always used to require.
+const RARE_EVOLUTION_LEVEL_GAP = 19;
 
 // Stone/trade/friendship-only evolvers (Eevee, Vulpix, Kadabra, etc.) are
 // allowed into the adopt pool, but only rarely - most draws that land on one
@@ -155,8 +161,12 @@ function plainLevelUpMinLevel(child) {
 // type - so /진화 can let the owner pick instead of the bot guessing for them.
 // minLevel is the real shared level when every branch plain-level-ups at the
 // same number; otherwise (any conditional trigger, or branches that disagree)
-// it falls back to the synthetic RARE_EVOLUTION_LEVEL and rare is true.
-async function getFollowingEvolution(speciesId) {
+// it falls back to the synthetic currentLevel + RARE_EVOLUTION_LEVEL_GAP and
+// rare is true. currentLevel is the pet's level AT this stage (1 for a fresh
+// adopt candidate, pet.level for a mid-chain evolution) - callers must pass
+// the real value for a mid-chain species, or a rare synthetic requirement can
+// end up already satisfied before the pet even reaches that stage.
+async function getFollowingEvolution(speciesId, currentLevel = 1) {
   const raw = await getRawSpecies(speciesId);
   const chain = await getEvolutionChain(raw.evolution_chain.url);
   const node = findChainNode(chain.chain, speciesId);
@@ -168,7 +178,7 @@ async function getFollowingEvolution(speciesId) {
   }));
 
   const sameLevel = children.every((c) => c.plainLevel != null && c.plainLevel === children[0].plainLevel);
-  const minLevel = sameLevel ? children[0].plainLevel : RARE_EVOLUTION_LEVEL;
+  const minLevel = sameLevel ? children[0].plainLevel : currentLevel + RARE_EVOLUTION_LEVEL_GAP;
 
   const options = await Promise.all(
     children.map(async (c) => {
