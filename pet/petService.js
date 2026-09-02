@@ -451,7 +451,7 @@ async function confirmAdopt(guildId, user, candidate, generationGroup) {
 // evolvePet, so it's never mistaken for a legacy doc and recomputed again.
 async function ensureEvolutionOptions(pet) {
   if (pet.nextEvolutionOptions !== undefined || !pet.nextEvolutionId) return;
-  const following = await getFollowingEvolution(pet.speciesId).catch(() => null);
+  const following = await getFollowingEvolution(pet.speciesId, pet.level).catch(() => null);
   pet.nextEvolutionOptions = following?.options ?? [];
   if (following?.minLevel != null) pet.nextEvolutionMinLevel = following.minLevel;
   await pet.save();
@@ -500,7 +500,7 @@ async function evolvePet(guildId, user, requestedSlot, chosenSpeciesId) {
 
   const fromName = pet.speciesName;
   const newSpecies = await getSpeciesById(choice.speciesId);
-  const nextStep = await getFollowingEvolution(choice.speciesId).catch(() => null);
+  const nextStep = await getFollowingEvolution(choice.speciesId, pet.level).catch(() => null);
 
   pet.speciesId = choice.speciesId;
   pet.speciesName = newSpecies.displayName;
