@@ -25,6 +25,7 @@ const { cacheMessage, logMessageUpdate, logMessageDelete } = require("./logging/
 const { logMemberAdd, logMemberRemove } = require("./logging/joinLeaveLogHandler");
 const { logChannelCreate, logChannelDelete } = require("./logging/serverLogHandler");
 const { handleReactionAdd, handleReactionRemove } = require("./reactionRoles/reactionRoleService");
+const { claimInteraction } = require("./interactionClaim");
 
 // Create a new client instance
 const client = new Client({
@@ -223,6 +224,18 @@ client.on(Events.MessageReactionRemove, (reaction, user) => {
 
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
+    // Discord's gateway can deliver the same interaction to more than one
+    // live process holding a connection on this bot token - most commonly
+    // during a Railway rolling deploy, where the old and new instance
+    // briefly overlap. Without this, both would run the full command/
+    // component handler (including DB side effects like deducting points or
+    // incrementing a daily counter) even though only one of them can ever
+    // win the actual Discord reply - confirmed in production via /복권 긁기
+    // silently double-incrementing its daily play count during a deploy.
+    // Claiming here, before any command/component code runs, makes every
+    // interaction exactly-once regardless of how many processes see it.
+    if (!(await claimInteraction(interaction))) return;
+
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) {
