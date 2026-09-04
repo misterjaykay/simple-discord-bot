@@ -2,6 +2,7 @@ const { SlashCommandBuilder } = require("discord.js");
 const { feedPet, feedAllPets, FEED_COST, MAX_FEEDS_PER_DAY, formatSlotChoices, dispatchRemainingDays } = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
 const { sendMissionFollowUp } = require("../../points/missionService");
+const { replyEphemeral, replyPublic } = require("../../interactionReply");
 
 function formatRemaining(ms) {
   const totalMinutes = Math.ceil(ms / 60000);
@@ -30,12 +31,18 @@ module.exports = {
     )
     .addBooleanOption((opt) => opt.setName("전체").setDescription("보유한 모든 펫에게 한 번에 밥을 줍니다 (펫마다 개별로 비용이 들어요)")),
   async execute(interaction) {
+    // Deferred immediately (before any DB work) - feedPet/feedAllPets chain
+    // several sequential DB round-trips (pet lookup, points balance,
+    // mission bookkeeping), which can blow past Discord's 3s ack window on a
+    // slow connection. See interactionReply.js for why this matters.
+    await interaction.deferReply({ ephemeral: true });
+
     if (!(await requirePetChannel(interaction))) return;
 
     if (interaction.options.getBoolean("전체")) {
       const result = await feedAllPets(interaction.guild.id, interaction.user);
       if (!result.ok) {
-        return interaction.reply({ content: "아직 펫이 없어요. `/펫입양`으로 입양해보세요!", ephemeral: true });
+        return replyEphemeral(interaction, { content: "아직 펫이 없어요. `/펫입양`으로 입양해보세요!" });
       }
 
       const lines = [];
@@ -48,7 +55,7 @@ module.exports = {
       if (result.skipped.length > 0) lines.push(result.skipped.map(skipReasonText).join("\n"));
       if (lines.length === 0) lines.push("밥을 줄 수 있는 펫이 없어요.");
 
-      await interaction.reply(lines.join("\n"));
+      await replyPublic(interaction, { content: lines.join("\n") });
       return sendMissionFollowUp(interaction, result.missionResult);
     }
 
@@ -56,44 +63,40 @@ module.exports = {
 
     if (!result.ok) {
       if (result.reason === "no-pet") {
-        return interaction.reply({ content: "아직 펫이 없어요. `/펫입양`으로 입양해보세요!", ephemeral: true });
+        return replyEphemeral(interaction, { content: "아직 펫이 없어요. `/펫입양`으로 입양해보세요!" });
       }
       if (result.reason === "slot-empty") {
-        return interaction.reply({ content: "그 슬롯엔 펫이 없어요.", ephemeral: true });
+        return replyEphemeral(interaction, { content: "그 슬롯엔 펫이 없어요." });
       }
       if (result.reason === "no-active-pet") {
-        return interaction.reply({
+        return replyEphemeral(interaction, {
           content: `여러 마리를 키우고 있어요: ${formatSlotChoices(result.pets)}\n\`/펫슬롯\`에서 활성 펫을 선택하거나, \`/펫밥주기 슬롯:번호\`로 직접 지정해주세요.`,
-          ephemeral: true,
         });
       }
       if (result.reason === "cooldown") {
-        return interaction.reply({
+        return replyEphemeral(interaction, {
           content: `아직 배가 안 고파해요. ${formatRemaining(result.remainingMs)} 후에 다시 줘보세요.`,
-          ephemeral: true,
         });
       }
       if (result.reason === "dispatched") {
-        return interaction.reply({
+        return replyEphemeral(interaction, {
           content: `지금 파견 중이라 밥을 줄 수 없어요. (복귀까지 약 ${dispatchRemainingDays(result.pet)}일)`,
-          ephemeral: true,
         });
       }
       if (result.reason === "not-enough-points") {
-        return interaction.reply({ content: `포인트가 부족해요. 밥값은 **${FEED_COST}**포인트예요.`, ephemeral: true });
+        return replyEphemeral(interaction, { content: `포인트가 부족해요. 밥값은 **${FEED_COST}**포인트예요.` });
       }
       if (result.reason === "daily-limit") {
-        return interaction.reply({
+        return replyEphemeral(interaction, {
           content: `오늘은 이미 ${MAX_FEEDS_PER_DAY}번 밥을 줬어요. 내일 다시 줘보세요!`,
-          ephemeral: true,
         });
       }
-      return interaction.reply({ content: "오류가 발생했습니다.", ephemeral: true });
+      return replyEphemeral(interaction, { content: "오류가 발생했습니다." });
     }
 
     const levelMsg = result.leveledUp ? ` 🎊 레벨업! 지금 Lv.${result.pet.level}` : "";
     const displayName = result.pet.nickname ?? result.pet.speciesName;
-    await interaction.reply(`🍖 ${displayName}에게 밥을 줬어요!${levelMsg}`);
+    await replyPublic(interaction, { content: `🍖 ${displayName}에게 밥을 줬어요!${levelMsg}` });
     await sendMissionFollowUp(interaction, result.missionResult);
   },
 };

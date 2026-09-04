@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const ReactionRole = require("../models/reaction-role");
 const { parseEmojiInput, parseMessageLink } = require("../reactionRoles/reactionRoleService");
+const { replyEphemeral } = require("../interactionReply");
 
 // Resolves a message link into the actual message, checked against THIS
 // guild (a link from another server would otherwise let an admin bind a role
@@ -42,32 +43,38 @@ module.exports = {
     .addSubcommand((sub) => sub.setName("목록").setDescription("현재 설정된 리액션 역할 목록을 봅니다. (관리자 전용)")),
 
   async execute(interaction) {
+    // Deferred immediately (before any DB/API work) - 추가/제거 each do two
+    // Discord API fetches plus DB reads/writes before replying, which can
+    // blow past Discord's 3s ack window on a slow connection. See
+    // interactionReply.js for why this matters.
+    await interaction.deferReply({ ephemeral: true });
+
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guild.id;
 
     if (sub === "목록") {
       const bindings = await ReactionRole.find({ guildId });
       if (bindings.length === 0) {
-        return interaction.reply({ content: "설정된 리액션 역할이 없어요. `/리액션역할 추가`로 만들어보세요.", ephemeral: true });
+        return replyEphemeral(interaction, { content: "설정된 리액션 역할이 없어요. `/리액션역할 추가`로 만들어보세요." });
       }
       const lines = bindings.map(
         (b) =>
           `${b.emojiDisplay} → <@&${b.roleId}> (https://discord.com/channels/${b.guildId}/${b.channelId}/${b.messageId})`
       );
-      return interaction.reply({ content: lines.join("\n"), ephemeral: true });
+      return replyEphemeral(interaction, { content: lines.join("\n") });
     }
 
     if (sub === "제거") {
       const link = interaction.options.getString("메시지링크", true);
       const emojiInput = interaction.options.getString("이모지", true);
       const resolved = await resolveTargetMessage(interaction, link);
-      if (resolved.error) return interaction.reply({ content: resolved.error, ephemeral: true });
+      if (resolved.error) return replyEphemeral(interaction, { content: resolved.error });
 
       const { emojiKey } = parseEmojiInput(emojiInput);
       const deleted = await ReactionRole.findOneAndDelete({ messageId: resolved.message.id, emojiKey });
-      if (!deleted) return interaction.reply({ content: "그 메시지+이모지 조합으로 설정된 리액션 역할이 없어요.", ephemeral: true });
+      if (!deleted) return replyEphemeral(interaction, { content: "그 메시지+이모지 조합으로 설정된 리액션 역할이 없어요." });
 
-      return interaction.reply({ content: `${emojiInput} 리액션 역할 연결을 해제했어요.`, ephemeral: true });
+      return replyEphemeral(interaction, { content: `${emojiInput} 리액션 역할 연결을 해제했어요.` });
     }
 
     // 추가
@@ -76,18 +83,18 @@ module.exports = {
     const role = interaction.options.getRole("역할", true);
 
     const resolved = await resolveTargetMessage(interaction, link);
-    if (resolved.error) return interaction.reply({ content: resolved.error, ephemeral: true });
+    if (resolved.error) return replyEphemeral(interaction, { content: resolved.error });
     const { channel, message } = resolved;
 
     if (role.managed || role.id === interaction.guild.id) {
-      return interaction.reply({ content: "그 역할은 지정할 수 없어요 (봇 전용 역할이거나 @everyone).", ephemeral: true });
+      return replyEphemeral(interaction, { content: "그 역할은 지정할 수 없어요 (봇 전용 역할이거나 @everyone)." });
     }
 
     const { emojiKey, emojiDisplay, reactTarget } = parseEmojiInput(emojiInput);
 
     const existing = await ReactionRole.findOne({ messageId: message.id, emojiKey });
     if (existing) {
-      return interaction.reply({ content: "그 메시지의 그 이모지는 이미 다른 역할에 연결돼 있어요. 먼저 `/리액션역할 제거`로 해제해주세요.", ephemeral: true });
+      return replyEphemeral(interaction, { content: "그 메시지의 그 이모지는 이미 다른 역할에 연결돼 있어요. 먼저 `/리액션역할 제거`로 해제해주세요." });
     }
 
     await ReactionRole.create({
@@ -106,9 +113,8 @@ module.exports = {
       console.error("[reaction-role-setup] failed to pre-react to message:", err.message);
     }
 
-    return interaction.reply({
+    return replyEphemeral(interaction, {
       content: `설정했어요! 이제 [이 메시지](${message.url})에 ${emojiDisplay} 리액션을 누르면 ${role}을(를) 받고, 취소하면 다시 빠져요.`,
-      ephemeral: true,
     });
   },
 };
