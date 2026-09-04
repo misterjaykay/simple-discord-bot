@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { resolvePetForAction, storePet, isDispatched, dispatchRemainingDays, MAX_STORAGE, formatSlotChoices } = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
+const { removeParticipantIfRegistered } = require("../../pet/tournamentService");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -37,6 +38,16 @@ module.exports = {
       const msg = result.reason === "storage-full" ? `보관함이 가득 찼어요. (최대 ${MAX_STORAGE}마리)` : "보관에 실패했어요.";
       return interaction.reply({ content: msg, ephemeral: true });
     }
+
+    // Mirrors 파양's cleanup (see pet/componentHandler.js) - a stored pet
+    // can't battle, so it shouldn't stay entered in this week's tournament
+    // (registerParticipant pins the exact pet via petId, and runTournament
+    // resolves that petId regardless of whether it's still in an active
+    // slot - without this, a pet entered then stored would still show up in
+    // the bracket).
+    await removeParticipantIfRegistered(interaction.guild.id, interaction.user.id, result.pet._id).catch((err) =>
+      console.error("[pet] failed to clear tournament registration after storing:", err.message)
+    );
 
     const name = result.pet.nickname ?? result.pet.speciesName;
     return interaction.reply(`📦 ${name}을(를) 보관함 ${result.pet.storageSlot}번 칸에 넣어뒀어요. 그 슬롯엔 새 펫을 입양할 수 있어요.`);
