@@ -106,6 +106,15 @@ async function handleScratch(interaction) {
   // user believed they'd played 5 times. Deferring ephemerally buys 15
   // minutes and costs nothing visible - most outcomes stay ephemeral anyway,
   // and big wins get deleted+re-sent as a public followUp below.
+  // Diagnostic logging (see commit history) - lets a repeat of the "plays
+  // jumped by more than 1" report be root-caused from Railway logs alone by
+  // grepping the interaction id: a genuinely duplicated invocation (two live
+  // instances during a rolling deploy, a gateway resume replay, etc.) shows
+  // as the SAME id logged twice; a real double click from the user shows as
+  // two DIFFERENT ids close together.
+  const debugId = interaction.id;
+  console.log(`[lottery] scratch start id=${debugId} user=${interaction.user.id} at=${new Date().toISOString()}`);
+
   await interaction.deferReply({ ephemeral: true });
 
   const amount = TICKET_PRICE;
@@ -119,6 +128,7 @@ async function handleScratch(interaction) {
   }
 
   if (record.lotteryPlaysToday >= DAILY_PLAY_LIMIT) {
+    console.log(`[lottery] scratch blocked id=${debugId} plays=${record.lotteryPlaysToday} at=${new Date().toISOString()}`);
     return interaction.editReply({
       content: `오늘 즉석복권은 ${DAILY_PLAY_LIMIT}번 다 사용했어요. 내일 다시 도전해주세요!`,
     });
@@ -134,10 +144,12 @@ async function handleScratch(interaction) {
   const payout = Math.round(amount * tier.multiplier);
   const net = payout - amount;
 
+  const playsBefore = record.lotteryPlaysToday;
   record.points += net;
   record.lotteryPlaysToday += 1;
   record.username = interaction.user.username ?? record.username;
   await record.save();
+  console.log(`[lottery] scratch saved id=${debugId} plays=${playsBefore}->${record.lotteryPlaysToday} at=${new Date().toISOString()}`);
 
   if (tier.multiplier === 0) {
     const jackpotCut = Math.round((amount * JACKPOT_FEED_PERCENT) / 100);

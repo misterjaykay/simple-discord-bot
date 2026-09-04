@@ -126,20 +126,38 @@ async function registerParticipant(guildId, user, slot) {
   }
 
   // One entry per pet slot, not per user - an owner can register every pet
-  // they have (up to their unlocked slot count) by calling this once per slot.
-  if (tournament.participants.some((p) => p.userId === user.id && p.slot === slot)) {
-    throw new Error("이미 그 슬롯의 펫으로 이번 주 토너먼트에 신청하셨어요.");
-  }
+  // they have (up to their unlocked slot count) by calling this once per
+  // slot. This has to be a single atomic findOneAndUpdate (condition + $push
+  // together), not a separate "does this slot already exist" read followed
+  // by a push+save - two /펫대전 신청 calls for the same slot close enough
+  // together (a double-tap, a client-side retry) could otherwise both read
+  // the participants array before either write lands, both see "not
+  // registered yet", and both push - Mongoose sends array pushes as atomic
+  // $push ops, so neither save overwrites the other and the same slot ends
+  // up registered twice. That's how a user with only MAX_SLOTS pets could
+  // end up with more tournament entries than pets.
+  const claimed = await PetTournament.findOneAndUpdate(
+    {
+      _id: tournament._id,
+      status: "REGISTRATION",
+      participants: { $not: { $elemMatch: { userId: user.id, slot } } },
+    },
+    { $push: { participants: { userId: user.id, username: user.username, petId: pet._id, slot } } },
+    { new: true }
+  );
+  if (!claimed) throw new Error("이미 그 슬롯의 펫으로 이번 주 토너먼트에 신청하셨어요.");
 
   const balance = await getOrCreatePoints(guildId, user);
   if (balance.points < ENTRY_FEE) {
+    // The slot was already claimed above (had to happen first to close the
+    // race) but they can't actually afford it - release it rather than
+    // leaving a free, unpaid entry in the bracket.
+    await PetTournament.updateOne({ _id: tournament._id }, { $pull: { participants: { userId: user.id, slot } } });
     throw new Error(`참가비가 부족해요. (참가비 ${ENTRY_FEE.toLocaleString()} 포인트, 현재 ${balance.points.toLocaleString()} 포인트)`);
   }
 
   await addPoints(guildId, user, -ENTRY_FEE);
-  tournament.participants.push({ userId: user.id, username: user.username, petId: pet._id, slot });
-  await tournament.save();
-  return { tournament, pet };
+  return { tournament: claimed, pet };
 }
 
 function shuffle(array) {
