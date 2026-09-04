@@ -106,12 +106,11 @@ async function handleScratch(interaction) {
   // user believed they'd played 5 times. Deferring ephemerally buys 15
   // minutes and costs nothing visible - most outcomes stay ephemeral anyway,
   // and big wins get deleted+re-sent as a public followUp below.
-  // Diagnostic logging (see commit history) - lets a repeat of the "plays
-  // jumped by more than 1" report be root-caused from Railway logs alone by
-  // grepping the interaction id: a genuinely duplicated invocation (two live
-  // instances during a rolling deploy, a gateway resume replay, etc.) shows
-  // as the SAME id logged twice; a real double click from the user shows as
-  // two DIFFERENT ids close together.
+  // Diagnostic logging kept around (see commit history) - now backed by a
+  // real fix: index.js claims every interaction id exactly once (see
+  // interactionClaim.js) before command.execute() is even called, closing
+  // the Railway-rolling-deploy overlap that caused this. These lines stay so
+  // a repeat is still traceable from Railway logs.
   const debugId = interaction.id;
   console.log(`[lottery] scratch start id=${debugId} user=${interaction.user.id} at=${new Date().toISOString()}`);
 
