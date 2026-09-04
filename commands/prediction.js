@@ -3,6 +3,7 @@ const Prediction = require("../models/prediction");
 const { addPoints } = require("../points/pointsService");
 const { buildPredictionMessage, refreshPredictionMessage } = require("../prediction/predictionView");
 const { lockPrediction, scheduleAutoLock, clearScheduledLock } = require("../prediction/predictionService");
+const { replyEphemeral, replyPublic } = require("../interactionReply");
 
 // If an admin doesn't set 시간/초 at all, the prediction still needs to lock
 // itself eventually rather than sitting open until someone remembers
@@ -64,30 +65,38 @@ module.exports = {
     .addSubcommand((sub) => sub.setName("확인").setDescription("현재 진행중인 예측 상태를 봅니다.")),
 
   async execute(interaction) {
+    // Deferred immediately (before any DB work) - every subcommand below does
+    // at least one DB round-trip before its reply, and 취소/종료 loop a DB
+    // write per bettor - which can blow past Discord's 3s ack window on a
+    // slow connection or a prediction with many bets. See interactionReply.js
+    // for why this matters (a failed reply() here after refunds/payouts have
+    // already saved would look like the admin action failed while actually
+    // having already moved everyone's points).
+    await interaction.deferReply({ ephemeral: true });
+
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guild.id;
 
     if (sub === "확인") {
       const active = await Prediction.findOne({ guildId, status: { $in: ["OPEN", "LOCKED"] } });
       if (!active) {
-        return interaction.reply({ content: "현재 진행중인 예측이 없습니다.", ephemeral: true });
+        return replyEphemeral(interaction, { content: "현재 진행중인 예측이 없습니다." });
       }
-      return interaction.reply(buildPredictionMessage(active));
+      return replyPublic(interaction, buildPredictionMessage(active));
     }
 
     // Every other subcommand mutates state, so it's admin-only. Not using
     // setDefaultMemberPermissions on the whole command because "확인" above
     // should stay open to everyone.
     if (!isAdmin(interaction)) {
-      return interaction.reply({ content: "이 명령어는 서버 관리자만 사용할 수 있어요.", ephemeral: true });
+      return replyEphemeral(interaction, { content: "이 명령어는 서버 관리자만 사용할 수 있어요." });
     }
 
     if (sub === "생성") {
       const existing = await Prediction.findOne({ guildId, status: { $in: ["OPEN", "LOCKED"] } });
       if (existing) {
-        return interaction.reply({
+        return replyEphemeral(interaction, {
           content: "이미 진행중인 예측이 있습니다. 먼저 `/예측 종료` 또는 `/예측 취소`로 마무리해주세요.",
-          ephemeral: true,
         });
       }
 
@@ -99,7 +108,7 @@ module.exports = {
       const durationMs = secondsOption == null ? DEFAULT_LOCK_DURATION_MS : secondsOption * 1000;
 
       if (durationMs > 0 && durationMs < 5000) {
-        return interaction.reply({ content: "너무 짧아요. 최소 5초 이상으로 설정해주세요.", ephemeral: true });
+        return replyEphemeral(interaction, { content: "너무 짧아요. 최소 5초 이상으로 설정해주세요." });
       }
 
       const lockAt = durationMs > 0 ? new Date(Date.now() + durationMs) : undefined;
@@ -107,9 +116,8 @@ module.exports = {
 
       const botPermissions = targetChannel.permissionsFor(interaction.guild.members.me);
       if (!botPermissions?.has(PermissionFlagsBits.SendMessages) || !botPermissions?.has(PermissionFlagsBits.ViewChannel)) {
-        return interaction.reply({
+        return replyEphemeral(interaction, {
           content: `<#${targetChannel.id}> 채널에 메시지를 보낼 권한이 없어요. 봇 권한을 확인해주세요.`,
-          ephemeral: true,
         });
       }
 
@@ -131,25 +139,25 @@ module.exports = {
       }
 
       if (targetChannel.id === interaction.channel.id) {
-        await interaction.reply({ content: "예측을 생성했습니다.", ephemeral: true });
+        await replyEphemeral(interaction, { content: "예측을 생성했습니다." });
       } else {
-        await interaction.reply({ content: `<#${targetChannel.id}> 채널에 예측을 올렸습니다.`, ephemeral: true });
+        await replyEphemeral(interaction, { content: `<#${targetChannel.id}> 채널에 예측을 올렸습니다.` });
       }
       return;
     }
 
     const active = await Prediction.findOne({ guildId, status: { $in: ["OPEN", "LOCKED"] } });
     if (!active) {
-      return interaction.reply({ content: "진행중인 예측이 없습니다.", ephemeral: true });
+      return replyEphemeral(interaction, { content: "진행중인 예측이 없습니다." });
     }
 
     if (sub === "마감") {
       if (active.status !== "OPEN") {
-        return interaction.reply({ content: "이미 마감된 예측입니다.", ephemeral: true });
+        return replyEphemeral(interaction, { content: "이미 마감된 예측입니다." });
       }
       clearScheduledLock(active._id);
       await lockPrediction(interaction.client, active._id, { announce: false });
-      await interaction.reply("베팅을 마감했습니다. 더 이상 베팅을 받지 않습니다.");
+      await replyPublic(interaction, { content: "베팅을 마감했습니다. 더 이상 베팅을 받지 않습니다." });
       return;
     }
 
@@ -158,7 +166,7 @@ module.exports = {
       await refundAllBets(guildId, active);
       active.status = "CANCELLED";
       await active.save();
-      await interaction.reply("예측을 취소하고 모든 베팅을 환불했습니다.");
+      await replyPublic(interaction, { content: "예측을 취소하고 모든 베팅을 환불했습니다." });
       await refreshPredictionMessage(interaction.client, active, true);
       return;
     }
@@ -166,7 +174,7 @@ module.exports = {
     if (sub === "종료") {
       const winningOptionIndex = interaction.options.getInteger("승리옵션") - 1;
       if (winningOptionIndex >= active.options.length) {
-        return interaction.reply({ content: "존재하지 않는 옵션 번호입니다.", ephemeral: true });
+        return replyEphemeral(interaction, { content: "존재하지 않는 옵션 번호입니다." });
       }
 
       const winningBets = active.bets.filter((b) => b.optionIndex === winningOptionIndex);
@@ -178,7 +186,7 @@ module.exports = {
         await refundAllBets(guildId, active);
         active.status = "CANCELLED";
         await active.save();
-        await interaction.reply("승리 옵션에 베팅한 사람이 없어서 예측을 무효 처리하고 전액 환불했습니다.");
+        await replyPublic(interaction, { content: "승리 옵션에 베팅한 사람이 없어서 예측을 무효 처리하고 전액 환불했습니다." });
         await refreshPredictionMessage(interaction.client, active, true);
         return;
       }
@@ -200,9 +208,9 @@ module.exports = {
           .map((p) => `<@${p.userId}> +${p.payout.toLocaleString()}`)
           .join("\n") || "없음";
 
-      await interaction.reply(
-        `**${active.options[winningOptionIndex]}** 결과로 정산되었습니다!\n총 판돈: ${totalPot.toLocaleString()} 포인트\n\n${summary}`
-      );
+      await replyPublic(interaction, {
+        content: `**${active.options[winningOptionIndex]}** 결과로 정산되었습니다!\n총 판돈: ${totalPot.toLocaleString()} 포인트\n\n${summary}`,
+      });
       await refreshPredictionMessage(interaction.client, active, true);
       return;
     }

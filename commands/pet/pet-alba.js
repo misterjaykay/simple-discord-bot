@@ -2,6 +2,7 @@ const { SlashCommandBuilder } = require("discord.js");
 const { doAlba, albaAllPets, formatSlotChoices, dispatchRemainingDays } = require("../../pet/petService");
 const { requirePetChannel } = require("../../pet/petChannelGuard");
 const { sendMissionFollowUp } = require("../../points/missionService");
+const { replyEphemeral, replyPublic } = require("../../interactionReply");
 
 // One line per pet /펫알바 전체 couldn't send out, with why - reuses the exact
 // reason codes doAlba already returns for the single-pet command above.
@@ -21,12 +22,18 @@ module.exports = {
     )
     .addBooleanOption((opt) => opt.setName("전체").setDescription("오늘 알바 가능한 모든 펫을 한 번에 보냅니다")),
   async execute(interaction) {
+    // Deferred immediately (before any DB work) - doAlba/albaAllPets chain
+    // several sequential DB round-trips (pet lookup, points balance, mission
+    // bookkeeping), which can blow past Discord's 3s ack window on a slow
+    // connection. See interactionReply.js for why this matters.
+    await interaction.deferReply({ ephemeral: true });
+
     if (!(await requirePetChannel(interaction))) return;
 
     if (interaction.options.getBoolean("전체")) {
       const result = await albaAllPets(interaction.guild.id, interaction.user);
       if (!result.ok) {
-        return interaction.reply({ content: "아직 펫이 없어요. `/펫입양`으로 입양해보세요!", ephemeral: true });
+        return replyEphemeral(interaction, { content: "아직 펫이 없어요. `/펫입양`으로 입양해보세요!" });
       }
 
       const lines = [];
@@ -40,7 +47,7 @@ module.exports = {
       if (result.skipped.length > 0) lines.push(result.skipped.map(skipReasonText).join("\n"));
       if (lines.length === 0) lines.push("알바를 보낼 수 있는 펫이 없어요.");
 
-      await interaction.reply(lines.join("\n"));
+      await replyPublic(interaction, { content: lines.join("\n") });
       return sendMissionFollowUp(interaction, result.missionResult);
     }
 
@@ -48,34 +55,32 @@ module.exports = {
 
     if (!result.ok) {
       if (result.reason === "no-pet") {
-        return interaction.reply({ content: "아직 펫이 없어요. `/펫입양`으로 입양해보세요!", ephemeral: true });
+        return replyEphemeral(interaction, { content: "아직 펫이 없어요. `/펫입양`으로 입양해보세요!" });
       }
       if (result.reason === "slot-empty") {
-        return interaction.reply({ content: "그 슬롯엔 펫이 없어요.", ephemeral: true });
+        return replyEphemeral(interaction, { content: "그 슬롯엔 펫이 없어요." });
       }
       if (result.reason === "no-active-pet") {
-        return interaction.reply({
+        return replyEphemeral(interaction, {
           content: `여러 마리를 키우고 있어요: ${formatSlotChoices(result.pets)}\n\`/펫슬롯\`에서 활성 펫을 선택하거나, \`/펫알바 슬롯:번호\`로 직접 지정해주세요.`,
-          ephemeral: true,
         });
       }
       if (result.reason === "dispatched") {
-        return interaction.reply({
+        return replyEphemeral(interaction, {
           content: `이 펫은 지금 파견 중이라 알바를 할 수 없어요. (복귀까지 약 ${dispatchRemainingDays(result.pet)}일)`,
-          ephemeral: true,
         });
       }
       if (result.reason === "daily-limit") {
-        return interaction.reply({ content: "오늘은 이미 알바를 다녀왔어요. 내일 다시 보내주세요!", ephemeral: true });
+        return replyEphemeral(interaction, { content: "오늘은 이미 알바를 다녀왔어요. 내일 다시 보내주세요!" });
       }
-      return interaction.reply({ content: "오류가 발생했습니다.", ephemeral: true });
+      return replyEphemeral(interaction, { content: "오류가 발생했습니다." });
     }
 
     const displayName = result.pet.nickname ?? result.pet.speciesName;
     const successPrefix = result.greatSuccess ? "🌟 대성공! " : "";
-    await interaction.reply(
-      `💼 ${successPrefix}${displayName}가(이) [${result.job.name}] 알바를 다녀왔어요! ${result.job.flavor}. **+${result.reward}P** 획득!`
-    );
+    await replyPublic(interaction, {
+      content: `💼 ${successPrefix}${displayName}가(이) [${result.job.name}] 알바를 다녀왔어요! ${result.job.flavor}. **+${result.reward}P** 획득!`,
+    });
     await sendMissionFollowUp(interaction, result.missionResult);
   },
 };

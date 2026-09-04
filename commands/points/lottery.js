@@ -18,6 +18,7 @@ const {
   SEED_JACKPOT,
   DEFAULT_TICKET_PRICE,
 } = require("../../points/lotteryDrawService");
+const { replyEphemeral, replyPublic } = require("../../interactionReply");
 
 // ---- 즉석복권 (/복권 긁기) ----
 
@@ -96,6 +97,17 @@ function oddsTableText() {
 }
 
 async function handleScratch(interaction) {
+  // Acknowledge immediately (defer) rather than waiting until after the DB
+  // round-trips below to reply - a slow Mongo connection can easily blow past
+  // Discord's 3s ack window, which throws on interaction.reply() *after* the
+  // play count has already been saved. That used to look like "the scratch
+  // failed" to the user while still silently burning one of their 5 daily
+  // plays, so a few of those in a row could hit the limit long before the
+  // user believed they'd played 5 times. Deferring ephemerally buys 15
+  // minutes and costs nothing visible - most outcomes stay ephemeral anyway,
+  // and big wins get deleted+re-sent as a public followUp below.
+  await interaction.deferReply({ ephemeral: true });
+
   const amount = TICKET_PRICE;
   const guildId = interaction.guild.id;
   const record = await getOrCreatePoints(guildId, interaction.user);
@@ -107,16 +119,14 @@ async function handleScratch(interaction) {
   }
 
   if (record.lotteryPlaysToday >= DAILY_PLAY_LIMIT) {
-    return interaction.reply({
+    return interaction.editReply({
       content: `오늘 즉석복권은 ${DAILY_PLAY_LIMIT}번 다 사용했어요. 내일 다시 도전해주세요!`,
-      ephemeral: true,
     });
   }
 
   if (record.points < amount) {
-    return interaction.reply({
+    return interaction.editReply({
       content: `포인트가 부족해요. (현재 ${record.points.toLocaleString()} 포인트)`,
-      ephemeral: true,
     });
   }
 
@@ -145,7 +155,15 @@ async function handleScratch(interaction) {
     .setFooter({ text: `순손익: ${net >= 0 ? "+" : ""}${net.toLocaleString()} 포인트 · 평균 회수율 80.35% · 오늘 남은 횟수: ${playsLeft}` });
 
   const isBigWin = tier.multiplier >= PUBLIC_WIN_MULTIPLIER_THRESHOLD;
-  await interaction.reply({ embeds: [embed], ephemeral: !isBigWin });
+  if (isBigWin) {
+    // The defer above was ephemeral (so small/losing results stay quiet) -
+    // big wins need to actually be visible in the channel, so drop the
+    // ephemeral placeholder and post the real result as a public followUp.
+    await interaction.deleteReply().catch(() => {});
+    await interaction.followUp({ embeds: [embed], ephemeral: false });
+  } else {
+    await interaction.editReply({ embeds: [embed] });
+  }
 
   const missionResult = await missionService.recordAction(guildId, interaction.user, "lottery");
   await missionService.sendMissionFollowUp(interaction, missionResult);
@@ -165,12 +183,21 @@ function myTicketLine(lottery, userId) {
 }
 
 async function handleDraw(interaction, sub) {
+  // Deferred immediately (before any DB work) - every branch below does at
+  // least one DB round-trip before its reply, and 종료/뽑기 loop a DB write
+  // per ticket holder / call runDraw's own multi-step payout chain, which can
+  // blow past Discord's 3s ack window. See interactionReply.js for why this
+  // matters (a failed reply() after a draw already resolved or a refund
+  // already went out used to look like the command failed while it hadn't -
+  // retrying 뽑기 in particular would draw again for real).
+  await interaction.deferReply({ ephemeral: true });
+
   const guildId = interaction.guild.id;
 
   if (sub === "확인") {
     const lottery = await Lottery.findOne({ guildId, status: "OPEN" });
     if (!lottery) {
-      return interaction.reply({ content: "진행중인 추첨 라운드가 없어요.", ephemeral: true });
+      return replyEphemeral(interaction, { content: "진행중인 추첨 라운드가 없어요." });
     }
 
     const drawLine = lottery.drawAt ? `⏰ 다음 추첨: <t:${Math.floor(lottery.drawAt.getTime() / 1000)}:F> (<t:${Math.floor(lottery.drawAt.getTime() / 1000)}:R>)\n` : "";
@@ -190,12 +217,12 @@ async function handleDraw(interaction, sub) {
             : "잭팟 보너스 없음 - 즉석복권 꽝이나 이월 시 여기로 쌓여요",
       })
       .setColor(0xf1c40f);
-    return interaction.reply({ embeds: [embed] });
+    return replyPublic(interaction, { embeds: [embed] });
   }
 
   if (sub === "시작") {
     if (!isAdmin(interaction)) {
-      return interaction.reply({ content: "이 명령어는 서버 관리자만 사용할 수 있어요.", ephemeral: true });
+      return replyEphemeral(interaction, { content: "이 명령어는 서버 관리자만 사용할 수 있어요." });
     }
     const maxTickets = interaction.options.getInteger("최대티켓") ?? DEFAULT_MAX_TICKETS_PER_PERSON;
 
@@ -203,67 +230,67 @@ async function handleDraw(interaction, sub) {
     try {
       lottery = await startLottery(guildId, interaction.user.id, DEFAULT_TICKET_PRICE, maxTickets, interaction.channelId);
     } catch (err) {
-      return interaction.reply({ content: err.message, ephemeral: true });
+      return replyEphemeral(interaction, { content: err.message });
     }
     scheduleWeeklyDraw(interaction.client, lottery);
 
-    return interaction.reply(
-      `🎟️ 추첨 복권을 시작했습니다! 티켓 1장 = ${DEFAULT_TICKET_PRICE.toLocaleString()} 포인트 (1인당 최대 ${maxTickets}장). ` +
+    return replyPublic(interaction, {
+      content:
+        `🎟️ 추첨 복권을 시작했습니다! 티켓 1장 = ${DEFAULT_TICKET_PRICE.toLocaleString()} 포인트 (1인당 최대 ${maxTickets}장). ` +
         `기본 잭팟 ${SEED_JACKPOT.toLocaleString()} 포인트로 시작합니다. ` +
         `매주 토요일 밤 11:30(미국 동부시간)에 자동 추첨되며, 다음 추첨은 <t:${Math.floor(lottery.drawAt.getTime() / 1000)}:F>입니다. ` +
-        "`/복권 추첨 구매`로 참여하세요. 추첨 30분 전엔 이 채널에 공지, 10분 전엔 그때까지 티켓을 산 분들께 알림, 추첨 직후엔 결과까지 이 채널로 보내드려요."
-    );
+        "`/복권 추첨 구매`로 참여하세요. 추첨 30분 전엔 이 채널에 공지, 10분 전엔 그때까지 티켓을 산 분들께 알림, 추첨 직후엔 결과까지 이 채널로 보내드려요.",
+    });
   }
 
   if (sub === "종료") {
     if (!isAdmin(interaction)) {
-      return interaction.reply({ content: "이 명령어는 서버 관리자만 사용할 수 있어요.", ephemeral: true });
+      return replyEphemeral(interaction, { content: "이 명령어는 서버 관리자만 사용할 수 있어요." });
     }
     try {
       await stopLottery(guildId);
     } catch (err) {
-      return interaction.reply({ content: err.message, ephemeral: true });
+      return replyEphemeral(interaction, { content: err.message });
     }
-    return interaction.reply("추첨 복권을 종료했습니다. 이번 라운드에 구매된 티켓은 전액 환불되었고, 자동 추첨은 더 이상 진행되지 않습니다.");
+    return replyPublic(interaction, { content: "추첨 복권을 종료했습니다. 이번 라운드에 구매된 티켓은 전액 환불되었고, 자동 추첨은 더 이상 진행되지 않습니다." });
   }
 
   if (sub === "구매") {
     const count = interaction.options.getInteger("개수");
     try {
       const lottery = await buyTickets(guildId, interaction.user, count);
-      return interaction.reply(
-        `🎟️ 티켓 ${count}장을 구매했습니다. 현재 판돈: ${totalPot(lottery).toLocaleString()} 포인트\n${myTicketLine(lottery, interaction.user.id)}`
-      );
+      return replyPublic(interaction, {
+        content: `🎟️ 티켓 ${count}장을 구매했습니다. 현재 판돈: ${totalPot(lottery).toLocaleString()} 포인트\n${myTicketLine(lottery, interaction.user.id)}`,
+      });
     } catch (err) {
-      return interaction.reply({ content: err.message, ephemeral: true });
+      return replyEphemeral(interaction, { content: err.message });
     }
   }
 
   if (sub === "뽑기") {
     if (!isAdmin(interaction)) {
-      return interaction.reply({ content: "이 명령어는 서버 관리자만 사용할 수 있어요.", ephemeral: true });
+      return replyEphemeral(interaction, { content: "이 명령어는 서버 관리자만 사용할 수 있어요." });
     }
     try {
       const result = await runDraw(guildId, interaction.client);
-      return interaction.reply(formatDrawResultMessage(result));
+      return replyPublic(interaction, { content: formatDrawResultMessage(result) });
     } catch (err) {
-      return interaction.reply({ content: err.message, ephemeral: true });
+      return replyEphemeral(interaction, { content: err.message });
     }
   }
 
   if (sub === "채널설정") {
     if (!isAdmin(interaction)) {
-      return interaction.reply({ content: "이 명령어는 서버 관리자만 사용할 수 있어요.", ephemeral: true });
+      return replyEphemeral(interaction, { content: "이 명령어는 서버 관리자만 사용할 수 있어요." });
     }
     const channel = interaction.options.getChannel("채널");
     try {
       await setAnnounceChannel(guildId, channel.id, interaction.client);
     } catch (err) {
-      return interaction.reply({ content: err.message, ephemeral: true });
+      return replyEphemeral(interaction, { content: err.message });
     }
-    return interaction.reply({
+    return replyEphemeral(interaction, {
       content: `앞으로 이 라운드(그리고 자동으로 이어지는 다음 라운드들)의 30분 전 공지/10분 전 알림/추첨 결과를 전부 ${channel}로 보냅니다.`,
-      ephemeral: true,
     });
   }
 }
