@@ -90,8 +90,15 @@ if (process.env.MONGODB_URI) {
     // {slot: 1} queries would silently miss them. Every pre-slots pet was the
     // user's only pet, so slot 1 is the correct value. Safe to re-run every
     // boot - the filter only matches docs still missing the field.
+    // storageSlot must also be absent: a pet parked in storage (/펫보관) is
+    // *intentionally* slot-less (see petService.storePet, which $unsets slot
+    // when it $sets storageSlot) - without this exclusion, this backfill
+    // would try to shove a stored pet back into slot 1 (silently corrupting
+    // it into having both slot and storageSlot set at once if that slot
+    // happened to be free, or just erroring on the unique index if it
+    // wasn't - which is the E11000 "pet slot backfill failed" seen in prod).
     require("./models/pet")
-      .updateMany({ slot: { $exists: false } }, { $set: { slot: 1 } })
+      .updateMany({ slot: { $exists: false }, storageSlot: { $exists: false } }, { $set: { slot: 1 } })
       .catch((err) => console.error("[mongo] pet slot backfill failed:", err.message));
 
     // Drop/rebuild indexes to match the current schemas. Needed because Mongoose's
