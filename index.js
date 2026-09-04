@@ -5,6 +5,9 @@ const path = require("node:path");
 const mongoose = require("mongoose");
 const { Client, Collection, Events, GatewayIntentBits, Partials, ActivityType } = require("discord.js");
 
+const { INSTANCE_ID } = require("./instanceId");
+console.log(`[boot] instance ${INSTANCE_ID} starting, pid=${process.pid}, at=${new Date().toISOString()}`);
+
 const { handleVoiceStateUpdate } = require("./voicemaster/voiceStateHandler");
 const { handleVoicemasterComponent } = require("./voicemaster/componentHandler");
 const { handlePredictionComponent } = require("./prediction/componentHandler");
@@ -241,7 +244,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // silently double-incrementing its daily play count during a deploy.
     // Claiming here, before any command/component code runs, makes every
     // interaction exactly-once regardless of how many processes see it.
-    if (!(await claimInteraction(interaction))) return;
+    const claimed = await claimInteraction(interaction);
+    console.log(`[claim] instance ${INSTANCE_ID} id=${interaction.id} claimed=${claimed} at=${new Date().toISOString()}`);
+    if (!claimed) return;
 
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
