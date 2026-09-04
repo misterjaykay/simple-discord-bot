@@ -19,6 +19,7 @@ const {
   DEFAULT_TICKET_PRICE,
 } = require("../../points/lotteryDrawService");
 const { replyEphemeral, replyPublic } = require("../../interactionReply");
+const { INSTANCE_ID } = require("../../instanceId");
 
 // ---- 즉석복권 (/복권 긁기) ----
 
@@ -112,7 +113,7 @@ async function handleScratch(interaction) {
   // the Railway-rolling-deploy overlap that caused this. These lines stay so
   // a repeat is still traceable from Railway logs.
   const debugId = interaction.id;
-  console.log(`[lottery] scratch start id=${debugId} user=${interaction.user.id} at=${new Date().toISOString()}`);
+  console.log(`[lottery] scratch start instance=${INSTANCE_ID} id=${debugId} user=${interaction.user.id} at=${new Date().toISOString()}`);
 
   await interaction.deferReply({ ephemeral: true });
 
@@ -148,7 +149,9 @@ async function handleScratch(interaction) {
   record.lotteryPlaysToday += 1;
   record.username = interaction.user.username ?? record.username;
   await record.save();
-  console.log(`[lottery] scratch saved id=${debugId} plays=${playsBefore}->${record.lotteryPlaysToday} at=${new Date().toISOString()}`);
+  console.log(
+    `[lottery] scratch saved instance=${INSTANCE_ID} id=${debugId} plays=${playsBefore}->${record.lotteryPlaysToday} at=${new Date().toISOString()}`
+  );
 
   if (tier.multiplier === 0) {
     const jackpotCut = Math.round((amount * JACKPOT_FEED_PERCENT) / 100);
