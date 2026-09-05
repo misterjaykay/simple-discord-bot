@@ -13,7 +13,7 @@ const ticketSchema = new Schema(
 // Draw-style ("추첨") lottery: a recurring weekly round (Powerball-style) - one
 // guild-wide pot built from ticket sales, drawn every Saturday 11:30 PM US
 // Eastern time (see getNextSaturdayNightET in points/lotteryDrawService.js).
-// Most draws don't actually pay anyone (see JACKPOT_HIT_CHANCE), in which case
+// Most draws don't actually pay anyone (see JACKPOT_BASE_HIT_CHANCE), in which case
 // the whole pot rolls over into next week's round instead of vanishing -
 // that's what keeps a jackpot building week over week. Reachable via
 // `/복권 추첨 ...` (commands/lottery.js). Only one OPEN round per guild at a
@@ -40,6 +40,14 @@ const lotterySchema = new Schema({
   // rolled-over pot from a previous week with no winner. Counted in the
   // pot/payout the same as ticket money, just not owned by a bettor.
   bonusPot: { type: Number, default: 0 },
+  // This round's actual chance (0-1) that a drawn winner is picked at all -
+  // see JACKPOT_BASE_HIT_CHANCE/JACKPOT_HIT_CHANCE_STEP in
+  // points/lotteryDrawService.js. Starts at the base rate on a fresh `시작`,
+  // climbs a fixed step on every rollover (no winner that week), and resets
+  // to the base rate the round after a win - same escalate-then-reset shape
+  // as a real progressive jackpot, on top of the pot itself already growing
+  // via bonusPot rollover.
+  jackpotHitChance: { type: Number },
   // When the next automatic weekly drawing should happen (re-armed from the
   // DB on startup, same pattern as prediction auto-lock / voice point events).
   drawAt: { type: Date },
