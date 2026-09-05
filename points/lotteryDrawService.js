@@ -18,7 +18,15 @@ const HOUSE_CUT_PERCENT = 10;
 // 35% means a jackpot hits roughly every ~3 weeks on average, which felt like
 // a good balance for a small Discord server (long enough to build real
 // suspense, not so long the feature feels dead).
-const JACKPOT_HIT_CHANCE = 0.35;
+//
+// On top of that, a round that rolls over doesn't just carry the pot forward
+// - the odds themselves climb too (see runDraw), same "the longer it goes,
+// the more likely the next one hits" shape a real progressive jackpot has.
+// Capped at 100% so it can never become an invalid/meaningless probability;
+// resets to the base rate the round after a win.
+const JACKPOT_BASE_HIT_CHANCE = 0.35;
+const JACKPOT_HIT_CHANCE_STEP = 0.05;
+const JACKPOT_HIT_CHANCE_MAX = 1;
 
 // Default per-person ticket cap (see models/lottery.js maxTicketsPerPerson) -
 // without this, one wealthy member could buy enough tickets to effectively
@@ -147,7 +155,16 @@ async function startLottery(guildId, userId, ticketPrice, maxTicketsPerPerson = 
   const bonusPot = SEED_JACKPOT + (await sweepBankedJackpot(guildId));
   const drawAt = getNextSaturdayNightET();
 
-  return Lottery.create({ guildId, ticketPrice, maxTicketsPerPerson, createdBy: userId, bonusPot, drawAt, announceChannelId });
+  return Lottery.create({
+    guildId,
+    ticketPrice,
+    maxTicketsPerPerson,
+    createdBy: userId,
+    bonusPot,
+    jackpotHitChance: JACKPOT_BASE_HIT_CHANCE,
+    drawAt,
+    announceChannelId,
+  });
 }
 
 // Admin-only "turn the whole recurring cycle off". Refunds any tickets bought
@@ -301,7 +318,7 @@ function formatDrawResultMessage(result) {
     return `아무도 티켓을 사지 않아서 이번 회차는 취소되었고, 잭팟 ${result.pot.toLocaleString()} 포인트는 다음 라운드로 이월됩니다.`;
   }
   if (result.outcome === "rollover") {
-    return `😮 이번엔 당첨자가 나오지 않았어요! 판돈 ${result.pot.toLocaleString()} 포인트는 전부 다음 라운드로 이월됩니다.`;
+    return `😮 이번엔 당첨자가 나오지 않았어요! 판돈 ${result.pot.toLocaleString()} 포인트는 전부 다음 라운드로 이월되고, 다음 주 당첨 확률은 ${Math.round(result.nextHitChance * 100)}%로 올라갑니다.`;
   }
   return `🎉 <@${result.winnerId}> 님이 당첨되었습니다! 판돈 ${result.pot.toLocaleString()} 포인트 중 ${result.payout.toLocaleString()} 포인트를 받았습니다. (티켓 ${result.ticketsSold}장 판매)`;
 }
@@ -360,7 +377,7 @@ function scheduleWeeklyDraw(client, lottery) {
 
 // Runs after every draw (win, rollover, or the zero-ticket edge case) to keep
 // the weekly cycle going automatically - only stopLottery breaks the chain.
-async function openNextRound(guildId, ticketPrice, maxTicketsPerPerson, carryOverBonus, client, announceChannelId) {
+async function openNextRound(guildId, ticketPrice, maxTicketsPerPerson, carryOverBonus, jackpotHitChance, client, announceChannelId) {
   const bankedBonus = await sweepBankedJackpot(guildId);
   const drawAt = getNextSaturdayNightET();
 
@@ -370,6 +387,7 @@ async function openNextRound(guildId, ticketPrice, maxTicketsPerPerson, carryOve
     maxTicketsPerPerson,
     createdBy: "system", // auto-opened, not admin-triggered
     bonusPot: carryOverBonus + bankedBonus,
+    jackpotHitChance,
     drawAt,
     announceChannelId,
   });
@@ -380,11 +398,12 @@ async function openNextRound(guildId, ticketPrice, maxTicketsPerPerson, carryOve
 
 // Core draw logic, shared by the automatic weekly timer AND a manual admin
 // `/복권 추첨 뽑기` (deliberately the same code path so admins can't bypass the
-// odds - a manual draw is still subject to JACKPOT_HIT_CHANCE and can still
-// roll over). Always opens the next round afterward except when there simply
-// were no tickets at all - client is optional (used to (re)schedule the next
-// round's timer; omit only from contexts that don't have a client handy, in
-// which case rearmScheduledDraws will pick it up on the next boot).
+// odds - a manual draw is still subject to the round's own jackpotHitChance
+// and can still roll over). Always opens the next round afterward except
+// when there simply were no tickets at all - client is optional (used to
+// (re)schedule the next round's timer; omit only from contexts that don't
+// have a client handy, in which case rearmScheduledDraws will pick it up on
+// the next boot).
 async function runDraw(guildId, client) {
   const lottery = await Lottery.findOne({ guildId, status: "OPEN" });
   if (!lottery) throw new Error("진행중인 추첨 라운드가 없습니다.");
@@ -392,17 +411,20 @@ async function runDraw(guildId, client) {
   clearAllScheduledTimers(guildId);
   const tickets = totalTickets(lottery);
   const maxTicketsPerPerson = lottery.maxTicketsPerPerson || DEFAULT_MAX_TICKETS_PER_PERSON;
+  // Rounds created before this field existed fall back to the base rate.
+  const hitChance = lottery.jackpotHitChance ?? JACKPOT_BASE_HIT_CHANCE;
 
   if (tickets === 0) {
-    // Nobody played - just carry the bonus pot forward and try again next week.
+    // Nobody played - no draw actually happened, so the odds aren't touched
+    // either way (only carry the bonus pot forward and try again next week).
     lottery.status = "CANCELLED";
     lottery.resolvedAt = new Date();
     await lottery.save();
-    await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, lottery.bonusPot || 0, client, lottery.announceChannelId);
+    await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, lottery.bonusPot || 0, hitChance, client, lottery.announceChannelId);
     return { outcome: "no_tickets", pot: lottery.bonusPot || 0 };
   }
 
-  const jackpotHit = Math.random() < JACKPOT_HIT_CHANCE;
+  const jackpotHit = Math.random() < hitChance;
   const ticketPot = tickets * lottery.ticketPrice;
   const bonusPot = lottery.bonusPot || 0;
   const pot = ticketPot + bonusPot;
@@ -410,12 +432,14 @@ async function runDraw(guildId, client) {
   if (!jackpotHit) {
     // Powerball-style miss: everyone's tickets are still spent (that's the
     // cost of playing that week), but the whole pot rolls into next week
-    // instead of disappearing - this is what makes the jackpot grow.
+    // instead of disappearing - this is what makes the jackpot grow. The
+    // odds themselves also climb a step for next week, on top of that.
+    const nextHitChance = Math.min(hitChance + JACKPOT_HIT_CHANCE_STEP, JACKPOT_HIT_CHANCE_MAX);
     lottery.status = "ROLLOVER";
     lottery.resolvedAt = new Date();
     await lottery.save();
-    await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, pot, client, lottery.announceChannelId);
-    return { outcome: "rollover", pot, ticketsSold: tickets };
+    await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, pot, nextHitChance, client, lottery.announceChannelId);
+    return { outcome: "rollover", pot, ticketsSold: tickets, nextHitChance };
   }
 
   let roll = Math.floor(Math.random() * tickets);
@@ -447,8 +471,9 @@ async function runDraw(guildId, client) {
 
   // Unlike a rollover (which carries the whole pot forward, seed included), a
   // win pays the pot out and the next round starts from scratch - so it gets
-  // its own fresh SEED_JACKPOT baseline, same as a brand new `/복권 추첨 시작`.
-  await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, SEED_JACKPOT, client, lottery.announceChannelId);
+  // its own fresh SEED_JACKPOT baseline and the odds reset to the base rate,
+  // same as a brand new `/복권 추첨 시작`.
+  await openNextRound(guildId, lottery.ticketPrice, maxTicketsPerPerson, SEED_JACKPOT, JACKPOT_BASE_HIT_CHANCE, client, lottery.announceChannelId);
 
   return { outcome: "win", winnerId: winner.userId, payout, pot, ticketsSold: tickets };
 }
@@ -503,7 +528,9 @@ module.exports = {
   totalTickets,
   totalPot,
   HOUSE_CUT_PERCENT,
-  JACKPOT_HIT_CHANCE,
+  JACKPOT_BASE_HIT_CHANCE,
+  JACKPOT_HIT_CHANCE_STEP,
+  JACKPOT_HIT_CHANCE_MAX,
   DEFAULT_MAX_TICKETS_PER_PERSON,
   SEED_JACKPOT,
   DEFAULT_TICKET_PRICE,

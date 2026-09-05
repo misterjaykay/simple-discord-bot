@@ -139,10 +139,13 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
     Draws happen automatically every Saturday 11:30 PM US Eastern time
     (`getNextSaturdayNightET` in `points/lotteryDrawService.js` - handles
     EST/EDT via `Intl.DateTimeFormat`, no extra date library needed), and only
-    have a 35% (`JACKPOT_HIT_CHANCE`) chance of actually paying someone out -
-    on a miss, the whole pot rolls over into next week's round instead of
-    disappearing, so the jackpot visibly grows over consecutive misses before
-    someone finally hits it. A hit pays the weighted-random ticket-holder the
+    have a 35% (`JACKPOT_BASE_HIT_CHANCE`) chance of actually paying someone
+    out - on a miss, the whole pot rolls over into next week's round instead
+    of disappearing, and the odds themselves climb 5 percentage points
+    (`JACKPOT_HIT_CHANCE_STEP`, capped at 100%) for next week too, so both the
+    jackpot and the chance of hitting it grow over consecutive misses before
+    someone finally wins - which resets the odds back to 35% for the round
+    after. A hit pays the weighted-random ticket-holder the
     ticket pot (10% house cut) plus the full bonus pot (uncut); either way the
     next round opens automatically (still every Saturday night), so admins
     only need `시작` once. `뽑기` forces an immediate draw through the same

@@ -13,7 +13,7 @@ const {
   formatDrawResultMessage,
   totalTickets,
   totalPot,
-  JACKPOT_HIT_CHANCE,
+  JACKPOT_BASE_HIT_CHANCE,
   DEFAULT_MAX_TICKETS_PER_PERSON,
   SEED_JACKPOT,
   DEFAULT_TICKET_PRICE,
@@ -195,7 +195,9 @@ function myTicketLine(lottery, userId) {
   const total = totalTickets(lottery);
   const mine = lottery.tickets.find((t) => t.userId === userId)?.count || 0;
   const share = total > 0 ? formatPercent(mine / total) : "0%";
-  return `당신의 티켓: ${mine}장 / 총 ${total}장 (약 ${share}) · 이번 주 당첨자가 나올 확률: ${Math.round(JACKPOT_HIT_CHANCE * 100)}%`;
+  // Rounds created before jackpotHitChance existed fall back to the base rate.
+  const hitChance = lottery.jackpotHitChance ?? JACKPOT_BASE_HIT_CHANCE;
+  return `당신의 티켓: ${mine}장 / 총 ${total}장 (약 ${share}) · 이번 주 당첨자가 나올 확률: ${Math.round(hitChance * 100)}%`;
 }
 
 async function handleDraw(interaction, sub) {
