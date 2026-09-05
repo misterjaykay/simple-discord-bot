@@ -23,17 +23,19 @@ async function replyEphemeral(interaction, payload) {
 
 // Use for a reply that should be visible in the channel. If the command
 // already deferred ephemerally (the placeholder "thinking..." was private),
-// editReply can't change a defer's ephemeral flag, so the real result is
-// posted as a public followUp instead - but the ephemeral placeholder is
-// edited to something trivial rather than deleted. Deleting it (an earlier
-// version of this helper did) broke Discord's client-side rendering of the
-// followUp: with the original deferred response gone, the client couldn't
-// resolve it and showed "Message could not be loaded" on the followUp in
-// production (seen on 펫밥주기/펫놀아주기 전체 results and elsewhere).
+// editReply can't change a defer's ephemeral flag, so the real result has to
+// go out some other way. Posting it as a followUp while deleting that
+// placeholder broke Discord's client-side rendering of the followUp
+// ("Message could not be loaded", seen in production); editing the
+// placeholder to a trivial confirmation instead of deleting it fixed that
+// but left an ugly, pointless second message next to the real result. Ordinary
+// channel.send() sidesteps both: it's a plain message with no relationship
+// to the interaction's response chain at all, so the ephemeral placeholder
+// can just be deleted cleanly with nothing left over.
 async function replyPublic(interaction, payload) {
   if (interaction.deferred && !interaction.replied) {
-    await interaction.editReply({ content: "✅ 완료 (아래 메시지 확인)" }).catch(() => {});
-    return interaction.followUp({ ...payload, ephemeral: false });
+    await interaction.deleteReply().catch(() => {});
+    return interaction.channel.send(payload);
   }
   if (interaction.replied) {
     return interaction.followUp({ ...payload, ephemeral: false });
