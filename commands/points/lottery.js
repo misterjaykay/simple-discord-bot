@@ -171,10 +171,12 @@ async function handleScratch(interaction) {
   const isBigWin = tier.multiplier >= PUBLIC_WIN_MULTIPLIER_THRESHOLD;
   if (isBigWin) {
     // The defer above was ephemeral (so small/losing results stay quiet) -
-    // big wins need to actually be visible in the channel, so drop the
-    // ephemeral placeholder and post the real result as a public followUp.
-    await interaction.deleteReply().catch(() => {});
-    await interaction.followUp({ embeds: [embed], ephemeral: false });
+    // big wins need to actually be visible in the channel, so this posts the
+    // real result as a public followUp (see interactionReply.js - it edits
+    // the ephemeral placeholder to something trivial rather than deleting
+    // it, since deleting it broke Discord's client-side rendering of the
+    // followUp).
+    await replyPublic(interaction, { embeds: [embed] });
   } else {
     await interaction.editReply({ embeds: [embed] });
   }
