@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { checkIn } = require("../../points/checkinService");
 const { sendMissionFollowUp } = require("../../points/missionService");
-const { replyPrivateError } = require("../../interactionReply");
+const { replyEphemeral, replyPublic } = require("../../interactionReply");
 
 module.exports = {
   data: new SlashCommandBuilder().setName("출석").setDescription("하루 한 번 출석체크를 하고 포인트를 받습니다."),
@@ -11,18 +11,18 @@ module.exports = {
     // which can blow past Discord's 3s ack window on a slow connection. See
     // interactionReply.js for why this matters. Deferred *non-ephemeral*
     // (unlike most other commands here) so the common-case success reply
-    // below can use plain editReply() and keep Discord's native "[user] used
-    // /출석" attribution, instead of losing it the way a public followUp/
-    // channel.send would.
+    // below keeps Discord's native "[user] used /출석" attribution -
+    // replyEphemeral/replyPublic route correctly either way based on how
+    // this actually deferred.
     await interaction.deferReply({ ephemeral: false });
 
     const result = await checkIn(interaction.guild.id, interaction.user);
 
     if (result.alreadyCheckedIn) {
-      return replyPrivateError(interaction, { content: "오늘은 이미 출석체크를 했어요. 내일 다시 와주세요!" });
+      return replyEphemeral(interaction, { content: "오늘은 이미 출석체크를 했어요. 내일 다시 와주세요!" });
     }
 
-    await interaction.editReply({
+    await replyPublic(interaction, {
       content: `✅ 출석체크 완료! **${result.awarded}** 포인트를 받았어요. (연속 출석 **${result.streak}**일째)`,
     });
     await sendMissionFollowUp(interaction, result.missionResult);

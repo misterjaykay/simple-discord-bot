@@ -12,7 +12,11 @@ module.exports = {
     // Deferred immediately (before any DB work) - a lookup plus a save is two
     // sequential DB round-trips before the reply, which can blow past
     // Discord's 3s ack window on a slow connection. See interactionReply.js.
-    await interaction.deferReply({ ephemeral: true });
+    // Deferred *non-ephemeral* since the success path (the common case) is
+    // always public - keeps Discord's native "[user] used /생일추가"
+    // attribution; replyEphemeral routes the "already registered" case
+    // correctly regardless.
+    await interaction.deferReply({ ephemeral: false });
 
     const month = interaction.options.getInteger("월");
     const day = interaction.options.getInteger("일");
@@ -37,12 +41,8 @@ module.exports = {
         await new db.Birthday({ userId: id, userName: username, birthday }).save();
       }
 
-      // Public replies go out via a plain channel message (see
-      // interactionReply.js), which doesn't carry Discord's automatic
-      // "[user] used /command" attribution - so the mention is included
-      // directly in the content instead.
       return replyPublic(interaction, {
-        content: `${interaction.user} 등록되었습니다.\n\`\`\`이름:${username} 생일:${month}월 ${day}일\`\`\``,
+        content: `등록되었습니다.\n\`\`\`이름:${username} 생일:${month}월 ${day}일\`\`\``,
       });
     } catch (err) {
       console.error(err);

@@ -16,7 +16,15 @@ module.exports = {
     // several sequential DB round-trips plus live PokeAPI HTTP calls, which
     // can easily blow past Discord's 3s ack window. See interactionReply.js
     // for why this matters.
-    await interaction.deferReply({ ephemeral: true });
+    // Deferred *non-ephemeral*: whether this ends up as a public single-
+    // evolution result or a private branch-picker isn't known until after
+    // the DB work below, so there's no way to pick the right ephemeral flag
+    // up front. Public was chosen so the (more common) single-evolution
+    // result keeps Discord's native "[user] used /진화" attribution via a
+    // plain editReply(); every ephemeral path here (errors, the branch
+    // picker) pays for that via replyEphemeral's delete-then-ephemeral-
+    // followUp instead of a single edit.
+    await interaction.deferReply({ ephemeral: false });
 
     if (!(await requirePetChannel(interaction))) return;
 
@@ -55,11 +63,7 @@ module.exports = {
     if (options.length === 1) {
       const result = await evolvePet(interaction.guild.id, interaction.user, pet.slot, options[0].speciesId);
       if (!result.ok) return replyEphemeral(interaction, buildEvolveFailureMessage(result.reason));
-      // Public replies go out via a plain channel message (see
-      // interactionReply.js), which doesn't carry Discord's automatic
-      // "[user] used /command" attribution - so the mention is included
-      // directly in the content instead.
-      return replyPublic(interaction, { ...buildEvolvedMessage(result), content: `${interaction.user}` });
+      return replyPublic(interaction, buildEvolvedMessage(result));
     }
 
     // Ephemeral - the branch picker is private to the owner (componentHandler

@@ -65,17 +65,26 @@ module.exports = {
     .addSubcommand((sub) => sub.setName("확인").setDescription("현재 진행중인 예측 상태를 봅니다.")),
 
   async execute(interaction) {
-    // Deferred immediately (before any DB work) - every subcommand below does
-    // at least one DB round-trip before its reply, and 취소/종료 loop a DB
-    // write per bettor - which can blow past Discord's 3s ack window on a
-    // slow connection or a prediction with many bets. See interactionReply.js
-    // for why this matters (a failed reply() here after refunds/payouts have
-    // already saved would look like the admin action failed while actually
-    // having already moved everyone's points).
-    await interaction.deferReply({ ephemeral: true });
-
+    // getSubcommand() just reads already-parsed options, no DB/network -
+    // safe to call before deferring, so the defer's ephemeral flag can
+    // already reflect this sub's outcome instead of every sub sharing one
+    // choice. Every subcommand below does at least one DB round-trip before
+    // its reply, and 취소/종료 loop a DB write per bettor - which can blow
+    // past Discord's 3s ack window on a slow connection or a prediction with
+    // many bets. See interactionReply.js for why deferring immediately
+    // matters (a failed reply() here after refunds/payouts have already
+    // saved would look like the admin action failed while actually having
+    // already moved everyone's points).
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guild.id;
+
+    // 생성's own reply is always ephemeral regardless of outcome (the actual
+    // public prediction embed is a separate channel.send below, not this
+    // reply) - every other sub's success is always public, so it defers
+    // non-ephemeral to keep Discord's native "[user] used /예측 ..."
+    // attribution; replyEphemeral/replyPublic route each reply correctly
+    // either way.
+    await interaction.deferReply({ ephemeral: sub === "생성" });
 
     if (sub === "확인") {
       const active = await Prediction.findOne({ guildId, status: { $in: ["OPEN", "LOCKED"] } });
@@ -157,11 +166,7 @@ module.exports = {
       }
       clearScheduledLock(active._id);
       await lockPrediction(interaction.client, active._id, { announce: false });
-      // Public replies go out via a plain channel message (see
-      // interactionReply.js), which doesn't carry Discord's automatic
-      // "[user] used /command" attribution - so the mention is included
-      // directly in the content instead.
-      await replyPublic(interaction, { content: `${interaction.user} 베팅을 마감했습니다. 더 이상 베팅을 받지 않습니다.` });
+      await replyPublic(interaction, { content: "베팅을 마감했습니다. 더 이상 베팅을 받지 않습니다." });
       return;
     }
 
@@ -170,7 +175,7 @@ module.exports = {
       await refundAllBets(guildId, active);
       active.status = "CANCELLED";
       await active.save();
-      await replyPublic(interaction, { content: `${interaction.user} 예측을 취소하고 모든 베팅을 환불했습니다.` });
+      await replyPublic(interaction, { content: "예측을 취소하고 모든 베팅을 환불했습니다." });
       await refreshPredictionMessage(interaction.client, active, true);
       return;
     }
@@ -190,7 +195,7 @@ module.exports = {
         await refundAllBets(guildId, active);
         active.status = "CANCELLED";
         await active.save();
-        await replyPublic(interaction, { content: `${interaction.user} 승리 옵션에 베팅한 사람이 없어서 예측을 무효 처리하고 전액 환불했습니다.` });
+        await replyPublic(interaction, { content: "승리 옵션에 베팅한 사람이 없어서 예측을 무효 처리하고 전액 환불했습니다." });
         await refreshPredictionMessage(interaction.client, active, true);
         return;
       }
@@ -213,7 +218,7 @@ module.exports = {
           .join("\n") || "없음";
 
       await replyPublic(interaction, {
-        content: `${interaction.user} **${active.options[winningOptionIndex]}** 결과로 정산되었습니다!\n총 판돈: ${totalPot.toLocaleString()} 포인트\n\n${summary}`,
+        content: `**${active.options[winningOptionIndex]}** 결과로 정산되었습니다!\n총 판돈: ${totalPot.toLocaleString()} 포인트\n\n${summary}`,
       });
       await refreshPredictionMessage(interaction.client, active, true);
       return;

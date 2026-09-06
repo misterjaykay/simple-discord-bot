@@ -34,8 +34,11 @@ module.exports = {
     // Deferred immediately (before any DB work) - playWithPet/playAllPets
     // chain several sequential DB round-trips (pet lookup, points balance,
     // mission bookkeeping), which can blow past Discord's 3s ack window on a
-    // slow connection. See interactionReply.js for why this matters.
-    await interaction.deferReply({ ephemeral: true });
+    // slow connection. See interactionReply.js for why this matters. Deferred
+    // *non-ephemeral* since the success path (the common case) is always
+    // public - keeps Discord's native "[user] used /펫놀아주기" attribution;
+    // replyEphemeral routes error replies correctly regardless.
+    await interaction.deferReply({ ephemeral: false });
 
     if (!(await requirePetChannel(interaction))) return;
 
@@ -55,11 +58,7 @@ module.exports = {
       if (result.skipped.length > 0) lines.push(result.skipped.map(skipReasonText).join("\n"));
       if (lines.length === 0) lines.push("놀아줄 수 있는 펫이 없어요.");
 
-      // Public replies go out via a plain channel message (see
-      // interactionReply.js), which doesn't carry Discord's automatic
-      // "[user] used /command" attribution - so the mention is included
-      // directly in the content instead.
-      await replyPublic(interaction, { content: `${interaction.user} ${lines.join("\n")}` });
+      await replyPublic(interaction, { content: lines.join("\n") });
       return sendMissionFollowUp(interaction, result.missionResult);
     }
 
@@ -100,7 +99,7 @@ module.exports = {
 
     const levelMsg = result.leveledUp ? ` 🎊 레벨업! 지금 Lv.${result.pet.level}` : "";
     const displayName = result.pet.nickname ?? result.pet.speciesName;
-    await replyPublic(interaction, { content: `${interaction.user} 🎾 ${displayName}와(과) 신나게 놀아줬어요!${levelMsg}` });
+    await replyPublic(interaction, { content: `🎾 ${displayName}와(과) 신나게 놀아줬어요!${levelMsg}` });
     await sendMissionFollowUp(interaction, result.missionResult);
   },
 };
