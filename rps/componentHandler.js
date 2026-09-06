@@ -12,7 +12,7 @@ const {
 } = require("./rpsView");
 
 async function handleHandChoice(interaction, hand, sessionId, session) {
-  const result = playRound(sessionId, hand);
+  const result = await playRound(sessionId, hand);
 
   if (result.outcome === "tie") {
     return interaction.update(buildTieMessage(sessionId, result.userHand, result.botHand));
@@ -62,7 +62,7 @@ async function handleRpsComponent(interaction) {
   const action = parts[1];
   const sessionId = action === "hand" ? parts[3] : parts[2];
 
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session) {
     return interaction.update(buildExpiredMessage());
   }
