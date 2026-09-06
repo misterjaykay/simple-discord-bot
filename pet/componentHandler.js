@@ -186,6 +186,7 @@ async function handlePetComponent(interaction) {
   const session = await getSession(sessionId);
 
   if (!session) {
+    console.log(`[pet] adopt session not found id=${sessionId} action=${action} user=${interaction.user.id} at=${new Date().toISOString()}`);
     return interaction.update(buildExpiredMessage());
   }
   if (session.userId !== interaction.user.id) {
@@ -210,6 +211,9 @@ async function handlePetComponent(interaction) {
     // Can go null if a double-click raced this session past its final reroll
     // (or its own expiry) between the ownership check above and here.
     if (!updated) {
+      console.log(
+        `[pet] adopt updateCandidate found nothing id=${sessionId} user=${interaction.user.id} priorAttempts=${session.attemptsUsed} at=${new Date().toISOString()}`
+      );
       return interaction.editReply(buildExpiredMessage());
     }
 

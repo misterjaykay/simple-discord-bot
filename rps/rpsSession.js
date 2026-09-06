@@ -13,22 +13,43 @@ async function createSession(guildId, userId) {
   return doc._id.toString();
 }
 
+// Only a malformed/foreign sessionId (not a valid ObjectId) should read as
+// "no such session" - see pet/adoptSession.js for why a real DB error must
+// NOT be swallowed the same way (it was misreporting still-alive sessions
+// as expired whenever Mongo hiccuped, instead of surfacing as a normal,
+// loggable error).
+function isMissingSessionError(err) {
+  return err.name === "CastError";
+}
+
 async function getSession(sessionId) {
-  const doc = await RpsSession.findById(sessionId).catch(() => null);
+  let doc;
+  try {
+    doc = await RpsSession.findById(sessionId);
+  } catch (err) {
+    if (isMissingSessionError(err)) return null;
+    throw err;
+  }
   return doc ? docToSession(doc) : null;
 }
 
 async function recordWin(sessionId, streak, pendingAmount) {
-  const doc = await RpsSession.findByIdAndUpdate(
-    sessionId,
-    { streak, pendingAmount, lastActivityAt: new Date() },
-    { returnDocument: "after" }
-  ).catch(() => null);
+  let doc;
+  try {
+    doc = await RpsSession.findByIdAndUpdate(sessionId, { streak, pendingAmount, lastActivityAt: new Date() }, { returnDocument: "after" });
+  } catch (err) {
+    if (isMissingSessionError(err)) return null;
+    throw err;
+  }
   return doc ? docToSession(doc) : null;
 }
 
 async function deleteSession(sessionId) {
-  await RpsSession.findByIdAndDelete(sessionId).catch(() => {});
+  try {
+    await RpsSession.findByIdAndDelete(sessionId);
+  } catch (err) {
+    if (!isMissingSessionError(err)) throw err;
+  }
 }
 
 // Mirrors the old in-memory session's plain-object shape so callers
