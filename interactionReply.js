@@ -43,4 +43,30 @@ async function replyPublic(interaction, payload) {
   return interaction.reply(payload);
 }
 
-module.exports = { replyEphemeral, replyPublic };
+// For a command whose successful outcome is the common case and should carry
+// Discord's native "[user] used /command" attribution: defer non-ephemeral
+// (interaction.deferReply({ ephemeral: false })), then use plain
+// interaction.editReply() for the success case - a single message with the
+// real attribution header, not a plain @mention worked around into the
+// content. A failure/error can't reuse that already-public response (Discord
+// won't let a defer's ephemeral flag change), so route it through this
+// instead: deletes the public "thinking..." placeholder and sends the error
+// as a fresh ephemeral followUp, keeping the channel clean of a stuck
+// "thinking" message. Unlike replyPublic's delete+followUp (which broke
+// Discord's client-side rendering going ephemeral-defer -> public-followUp),
+// this is the reverse direction (public-defer -> ephemeral-followUp) and
+// hasn't been confirmed safe from the same "message could not be loaded"
+// quirk - if it turns out to have the same problem, it'll only be visible
+// to the one user who hit the error, not the whole channel.
+async function replyPrivateError(interaction, payload) {
+  if (interaction.deferred && !interaction.replied) {
+    await interaction.deleteReply().catch(() => {});
+    return interaction.followUp({ ...payload, ephemeral: true });
+  }
+  if (interaction.replied) {
+    return interaction.followUp({ ...payload, ephemeral: true });
+  }
+  return interaction.reply({ ...payload, ephemeral: true });
+}
+
+module.exports = { replyEphemeral, replyPublic, replyPrivateError };
