@@ -183,7 +183,7 @@ async function handlePetComponent(interaction) {
     return interaction.update(buildDispatchAllResultMessage(result));
   }
 
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
 
   if (!session) {
     return interaction.update(buildExpiredMessage());
@@ -206,7 +206,7 @@ async function handlePetComponent(interaction) {
       return interaction.followUp({ content: "다시 뽑는 중 오류가 발생했어요. 한 번 더 시도해주세요.", ephemeral: true });
     }
 
-    const updated = updateCandidate(sessionId, candidate);
+    const updated = await updateCandidate(sessionId, candidate);
     // Can go null if a double-click raced this session past its final reroll
     // (or its own expiry) between the ownership check above and here.
     if (!updated) {
@@ -217,7 +217,7 @@ async function handlePetComponent(interaction) {
     // there without ever clicking 확정, so instead of waiting for one more
     // click, the 10th reroll adopts that candidate right away.
     if (updated.attemptsUsed >= MAX_ADOPT_ATTEMPTS) {
-      deleteSession(sessionId);
+      await deleteSession(sessionId);
       const result = await confirmAdopt(session.guildId, interaction.user, candidate, session.generation);
 
       if (!result.ok) {
@@ -234,7 +234,7 @@ async function handlePetComponent(interaction) {
   }
 
   if (action === "confirm") {
-    deleteSession(sessionId);
+    await deleteSession(sessionId);
     const result = await confirmAdopt(session.guildId, interaction.user, session.candidate, session.generation);
 
     if (!result.ok) {

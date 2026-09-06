@@ -1,46 +1,41 @@
-const crypto = require("crypto");
+const RpsSession = require("../models/rps-session");
 
-// In-memory only, keyed by a random session id embedded in the button
-// customIds ("rps:hand:가위:<id>" etc). The entry fee is already spent by the
-// time a session exists (see rpsService.startSession), so if the bot restarts
-// or a session just times out mid-game, the player loses access to whatever
-// they had banked - same tradeoff as walking away from a slot machine mid-spin.
+// Mongo-backed (see models/rps-session.js for why) - keyed by the document's
+// own _id, embedded in the button customIds ("rps:hand:가위:<id>" etc). The
+// entry fee is already spent by the time a session exists (see
+// rpsService.startSession), so if the bot restarts or a session just times
+// out mid-game, the player loses access to whatever they had banked - same
+// tradeoff as walking away from a slot machine mid-spin.
 const SESSION_TTL_MS = 5 * 60 * 1000; // 5 minutes of inactivity auto-expires a session
 
-const sessions = new Map(); // sessionId -> { guildId, userId, streak, pendingAmount, timeout }
-
-function scheduleExpiry(sessionId) {
-  const session = sessions.get(sessionId);
-  if (!session) return;
-  if (session.timeout) clearTimeout(session.timeout);
-  session.timeout = setTimeout(() => sessions.delete(sessionId), SESSION_TTL_MS);
-  session.timeout.unref?.();
+async function createSession(guildId, userId) {
+  const doc = await RpsSession.create({ guildId, userId, streak: 0, pendingAmount: 0 });
+  return doc._id.toString();
 }
 
-function createSession(guildId, userId) {
-  const sessionId = crypto.randomUUID();
-  sessions.set(sessionId, { guildId, userId, streak: 0, pendingAmount: 0 });
-  scheduleExpiry(sessionId);
-  return sessionId;
+async function getSession(sessionId) {
+  const doc = await RpsSession.findById(sessionId).catch(() => null);
+  return doc ? docToSession(doc) : null;
 }
 
-function getSession(sessionId) {
-  return sessions.get(sessionId);
+async function recordWin(sessionId, streak, pendingAmount) {
+  const doc = await RpsSession.findByIdAndUpdate(
+    sessionId,
+    { streak, pendingAmount, lastActivityAt: new Date() },
+    { returnDocument: "after" }
+  ).catch(() => null);
+  return doc ? docToSession(doc) : null;
 }
 
-function recordWin(sessionId, streak, pendingAmount) {
-  const session = sessions.get(sessionId);
-  if (!session) return null;
-  session.streak = streak;
-  session.pendingAmount = pendingAmount;
-  scheduleExpiry(sessionId);
-  return session;
+async function deleteSession(sessionId) {
+  await RpsSession.findByIdAndDelete(sessionId).catch(() => {});
 }
 
-function deleteSession(sessionId) {
-  const session = sessions.get(sessionId);
-  if (session?.timeout) clearTimeout(session.timeout);
-  sessions.delete(sessionId);
+// Mirrors the old in-memory session's plain-object shape so callers
+// (rps/rpsService.js, rps/componentHandler.js) don't need to know this is
+// now a Mongoose document.
+function docToSession(doc) {
+  return { guildId: doc.guildId, userId: doc.userId, streak: doc.streak, pendingAmount: doc.pendingAmount };
 }
 
 module.exports = { createSession, getSession, recordWin, deleteSession, SESSION_TTL_MS };

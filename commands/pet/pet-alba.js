@@ -47,7 +47,11 @@ module.exports = {
       if (result.skipped.length > 0) lines.push(result.skipped.map(skipReasonText).join("\n"));
       if (lines.length === 0) lines.push("알바를 보낼 수 있는 펫이 없어요.");
 
-      await replyPublic(interaction, { content: lines.join("\n") });
+      // Public replies go out via a plain channel message (see
+      // interactionReply.js), which doesn't carry Discord's automatic
+      // "[user] used /command" attribution - so the mention is included
+      // directly in the content instead.
+      await replyPublic(interaction, { content: `${interaction.user} ${lines.join("\n")}` });
       return sendMissionFollowUp(interaction, result.missionResult);
     }
 
@@ -79,7 +83,7 @@ module.exports = {
     const displayName = result.pet.nickname ?? result.pet.speciesName;
     const successPrefix = result.greatSuccess ? "🌟 대성공! " : "";
     await replyPublic(interaction, {
-      content: `💼 ${successPrefix}${displayName}가(이) [${result.job.name}] 알바를 다녀왔어요! ${result.job.flavor}. **+${result.reward}P** 획득!`,
+      content: `${interaction.user} 💼 ${successPrefix}${displayName}가(이) [${result.job.name}] 알바를 다녀왔어요! ${result.job.flavor}. **+${result.reward}P** 획득!`,
     });
     await sendMissionFollowUp(interaction, result.missionResult);
   },

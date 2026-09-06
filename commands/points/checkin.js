@@ -19,7 +19,11 @@ module.exports = {
     }
 
     await replyPublic(interaction, {
-      content: `✅ 출석체크 완료! **${result.awarded}** 포인트를 받았어요. (연속 출석 **${result.streak}**일째)`,
+      // Public replies go out via a plain channel message (see
+      // interactionReply.js), which doesn't carry Discord's automatic
+      // "[user] used /command" attribution - so the mention is included
+      // directly in the content instead.
+      content: `${interaction.user} ✅ 출석체크 완료! **${result.awarded}** 포인트를 받았어요. (연속 출석 **${result.streak}**일째)`,
     });
     await sendMissionFollowUp(interaction, result.missionResult);
   },

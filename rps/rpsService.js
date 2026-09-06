@@ -68,7 +68,7 @@ async function startSession(guildId, user) {
   await addToHouseBank(guildId, ENTRY_FEE_HOUSE_SHARE);
   await addJackpotContribution(guildId, ENTRY_FEE_JACKPOT_SHARE);
 
-  const sessionId = createSession(guildId, user.id);
+  const sessionId = await createSession(guildId, user.id);
   return { sessionId, sessionsLeft: DAILY_SESSION_LIMIT - record.rpsSessionsToday };
 }
 
@@ -78,8 +78,8 @@ async function startSession(guildId, user) {
 //   { outcome: "lose", userHand, botHand, streakLost, lostAmount }
 //   { outcome: "win", userHand, botHand, streak, pendingAmount }
 //   { outcome: "capped_win", userHand, botHand, streak, pendingAmount }
-function playRound(sessionId, userHand) {
-  const session = getSession(sessionId);
+async function playRound(sessionId, userHand) {
+  const session = await getSession(sessionId);
   if (!session) return { outcome: "expired" };
   // A capped-out session should already be gone by now (the caller cashes it
   // out immediately on "capped_win" - see rps/componentHandler.js). This is
@@ -97,13 +97,13 @@ function playRound(sessionId, userHand) {
   if (result === "lose") {
     const streakLost = session.streak;
     const lostAmount = session.pendingAmount;
-    deleteSession(sessionId);
+    await deleteSession(sessionId);
     return { outcome: "lose", userHand, botHand, streakLost, lostAmount };
   }
 
   const streak = session.streak + 1;
   const pendingAmount = PAYOUT_TABLE[streak - 1];
-  recordWin(sessionId, streak, pendingAmount);
+  await recordWin(sessionId, streak, pendingAmount);
 
   return { outcome: streak >= MAX_STREAK ? "capped_win" : "win", userHand, botHand, streak, pendingAmount };
 }
@@ -112,11 +112,11 @@ function playRound(sessionId, userHand) {
 // pendingAmount 0 (e.g. a defensive cash-out before any win - just closes the
 // session for free). Returns null if the session is already gone (expired).
 async function cashOut(sessionId, guildId, user) {
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session) return null;
 
   const { streak, pendingAmount } = session;
-  deleteSession(sessionId);
+  await deleteSession(sessionId);
 
   if (pendingAmount > 0) {
     await addPoints(guildId, user, pendingAmount);

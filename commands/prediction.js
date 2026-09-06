@@ -157,7 +157,11 @@ module.exports = {
       }
       clearScheduledLock(active._id);
       await lockPrediction(interaction.client, active._id, { announce: false });
-      await replyPublic(interaction, { content: "베팅을 마감했습니다. 더 이상 베팅을 받지 않습니다." });
+      // Public replies go out via a plain channel message (see
+      // interactionReply.js), which doesn't carry Discord's automatic
+      // "[user] used /command" attribution - so the mention is included
+      // directly in the content instead.
+      await replyPublic(interaction, { content: `${interaction.user} 베팅을 마감했습니다. 더 이상 베팅을 받지 않습니다.` });
       return;
     }
 
@@ -166,7 +170,7 @@ module.exports = {
       await refundAllBets(guildId, active);
       active.status = "CANCELLED";
       await active.save();
-      await replyPublic(interaction, { content: "예측을 취소하고 모든 베팅을 환불했습니다." });
+      await replyPublic(interaction, { content: `${interaction.user} 예측을 취소하고 모든 베팅을 환불했습니다.` });
       await refreshPredictionMessage(interaction.client, active, true);
       return;
     }
@@ -186,7 +190,7 @@ module.exports = {
         await refundAllBets(guildId, active);
         active.status = "CANCELLED";
         await active.save();
-        await replyPublic(interaction, { content: "승리 옵션에 베팅한 사람이 없어서 예측을 무효 처리하고 전액 환불했습니다." });
+        await replyPublic(interaction, { content: `${interaction.user} 승리 옵션에 베팅한 사람이 없어서 예측을 무효 처리하고 전액 환불했습니다.` });
         await refreshPredictionMessage(interaction.client, active, true);
         return;
       }
@@ -209,7 +213,7 @@ module.exports = {
           .join("\n") || "없음";
 
       await replyPublic(interaction, {
-        content: `**${active.options[winningOptionIndex]}** 결과로 정산되었습니다!\n총 판돈: ${totalPot.toLocaleString()} 포인트\n\n${summary}`,
+        content: `${interaction.user} **${active.options[winningOptionIndex]}** 결과로 정산되었습니다!\n총 판돈: ${totalPot.toLocaleString()} 포인트\n\n${summary}`,
       });
       await refreshPredictionMessage(interaction.client, active, true);
       return;
