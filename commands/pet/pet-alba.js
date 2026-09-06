@@ -25,8 +25,11 @@ module.exports = {
     // Deferred immediately (before any DB work) - doAlba/albaAllPets chain
     // several sequential DB round-trips (pet lookup, points balance, mission
     // bookkeeping), which can blow past Discord's 3s ack window on a slow
-    // connection. See interactionReply.js for why this matters.
-    await interaction.deferReply({ ephemeral: true });
+    // connection. See interactionReply.js for why this matters. Deferred
+    // *non-ephemeral* since the success path (the common case) is always
+    // public - keeps Discord's native "[user] used /펫알바" attribution;
+    // replyEphemeral routes error replies correctly regardless.
+    await interaction.deferReply({ ephemeral: false });
 
     if (!(await requirePetChannel(interaction))) return;
 
@@ -47,11 +50,7 @@ module.exports = {
       if (result.skipped.length > 0) lines.push(result.skipped.map(skipReasonText).join("\n"));
       if (lines.length === 0) lines.push("알바를 보낼 수 있는 펫이 없어요.");
 
-      // Public replies go out via a plain channel message (see
-      // interactionReply.js), which doesn't carry Discord's automatic
-      // "[user] used /command" attribution - so the mention is included
-      // directly in the content instead.
-      await replyPublic(interaction, { content: `${interaction.user} ${lines.join("\n")}` });
+      await replyPublic(interaction, { content: lines.join("\n") });
       return sendMissionFollowUp(interaction, result.missionResult);
     }
 
@@ -83,7 +82,7 @@ module.exports = {
     const displayName = result.pet.nickname ?? result.pet.speciesName;
     const successPrefix = result.greatSuccess ? "🌟 대성공! " : "";
     await replyPublic(interaction, {
-      content: `${interaction.user} 💼 ${successPrefix}${displayName}가(이) [${result.job.name}] 알바를 다녀왔어요! ${result.job.flavor}. **+${result.reward}P** 획득!`,
+      content: `💼 ${successPrefix}${displayName}가(이) [${result.job.name}] 알바를 다녀왔어요! ${result.job.flavor}. **+${result.reward}P** 획득!`,
     });
     await sendMissionFollowUp(interaction, result.missionResult);
   },

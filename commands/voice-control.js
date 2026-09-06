@@ -52,13 +52,21 @@ module.exports = {
     .addSubcommand((sub) => sub.setName("소유권가져오기").setDescription("방장이 자리를 비운 채널의 소유권을 가져옵니다.")),
 
   async execute(interaction) {
-    // Deferred immediately (before any DB/API work) - every subcommand below
-    // does a DB lookup plus at least one Discord API call before replying,
-    // and 소유권가져오기 chains two role API calls plus a DB save - any of
-    // which can blow past Discord's 3s ack window. See interactionReply.js
-    // for why this matters (a failed reply() after 소유권가져오기's ownership
-    // transfer already saved used to look like it failed while it hadn't).
-    await interaction.deferReply({ ephemeral: true });
+    // getSubcommand() just reads already-parsed options, no DB/network -
+    // safe to call before deferring, so the defer's ephemeral flag can
+    // already reflect this sub's outcome. Every subcommand below does a DB
+    // lookup plus at least one Discord API call before replying, and
+    // 소유권가져오기 chains two role API calls plus a DB save - any of which
+    // can blow past Discord's 3s ack window. See interactionReply.js for why
+    // deferring immediately matters (a failed reply() after 소유권가져오기's
+    // ownership transfer already saved used to look like it failed while it
+    // hadn't). Only 소유권가져오기's success is ever public - every other sub
+    // is always ephemeral (administrative feedback, not a channel
+    // announcement) - so it's the only one deferred non-ephemeral, to keep
+    // Discord's native "[user] used /보이스채널 소유권가져오기" attribution on
+    // it; replyEphemeral/replyPublic route every reply correctly either way.
+    const sub = interaction.options.getSubcommand();
+    await interaction.deferReply({ ephemeral: sub !== "소유권가져오기" });
 
     const voiceChannel = interaction.member.voice.channel;
     if (!voiceChannel) {
@@ -69,8 +77,6 @@ module.exports = {
     if (!tracked) {
       return replyEphemeral(interaction, { content: "보이스마스터로 생성된 채널에서만 사용할 수 있습니다." });
     }
-
-    const sub = interaction.options.getSubcommand();
 
     if (sub === "소유권가져오기") {
       if (voiceChannel.members.has(tracked.ownerId)) {

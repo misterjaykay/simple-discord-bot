@@ -104,9 +104,17 @@ async function handleScratch(interaction) {
   // play count has already been saved. That used to look like "the scratch
   // failed" to the user while still silently burning one of their 5 daily
   // plays, so a few of those in a row could hit the limit long before the
-  // user believed they'd played 5 times. Deferring ephemerally buys 15
-  // minutes and costs nothing visible - most outcomes stay ephemeral anyway,
-  // and big wins get deleted+re-sent as a public followUp below.
+  // user believed they'd played 5 times.
+  // Deferred *non-ephemeral*: the actual roll isn't known until after the DB
+  // work below, so there's no way to pick the right ephemeral flag up front
+  // the way most other commands here do. Public was chosen so a big win
+  // (rare, and the whole point of showing it) keeps Discord's native
+  // "[user] used /복권 긁기" attribution via a plain editReply(); the far more
+  // common private outcome (꽝/반값/본전/2배 etc.) pays for that by going
+  // through replyEphemeral's delete-the-public-placeholder-then-ephemeral-
+  // followUp path instead of a single edit - a brief public "thinking..."
+  // flash before it's replaced, rather than the plain @mention workaround
+  // this used before.
   // Diagnostic logging kept around (see commit history) - now backed by a
   // real fix: index.js claims every interaction id exactly once (see
   // interactionClaim.js) before command.execute() is even called, closing
@@ -115,7 +123,7 @@ async function handleScratch(interaction) {
   const debugId = interaction.id;
   console.log(`[lottery] scratch start instance=${INSTANCE_ID} id=${debugId} user=${interaction.user.id} at=${new Date().toISOString()}`);
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ ephemeral: false });
 
   const amount = TICKET_PRICE;
   const guildId = interaction.guild.id;
@@ -129,13 +137,13 @@ async function handleScratch(interaction) {
 
   if (record.lotteryPlaysToday >= DAILY_PLAY_LIMIT) {
     console.log(`[lottery] scratch blocked id=${debugId} plays=${record.lotteryPlaysToday} at=${new Date().toISOString()}`);
-    return interaction.editReply({
+    return replyEphemeral(interaction, {
       content: `오늘 즉석복권은 ${DAILY_PLAY_LIMIT}번 다 사용했어요. 내일 다시 도전해주세요!`,
     });
   }
 
   if (record.points < amount) {
-    return interaction.editReply({
+    return replyEphemeral(interaction, {
       content: `포인트가 부족해요. (현재 ${record.points.toLocaleString()} 포인트)`,
     });
   }
@@ -170,15 +178,9 @@ async function handleScratch(interaction) {
 
   const isBigWin = tier.multiplier >= PUBLIC_WIN_MULTIPLIER_THRESHOLD;
   if (isBigWin) {
-    // The defer above was ephemeral (so small/losing results stay quiet) -
-    // big wins need to actually be visible in the channel, so this posts the
-    // real result as a plain channel message instead (see interactionReply.js).
-    // That message doesn't get Discord's automatic "[user] used /command"
-    // attribution the way an interaction reply would, so the mention is
-    // included directly in the content instead.
-    await replyPublic(interaction, { content: `${interaction.user}`, embeds: [embed] });
+    await replyPublic(interaction, { embeds: [embed] });
   } else {
-    await interaction.editReply({ embeds: [embed] });
+    await replyEphemeral(interaction, { embeds: [embed] });
   }
 
   const missionResult = await missionService.recordAction(guildId, interaction.user, "lottery");
@@ -207,8 +209,12 @@ async function handleDraw(interaction, sub) {
   // blow past Discord's 3s ack window. See interactionReply.js for why this
   // matters (a failed reply() after a draw already resolved or a refund
   // already went out used to look like the command failed while it hadn't -
-  // retrying 뽑기 in particular would draw again for real).
-  await interaction.deferReply({ ephemeral: true });
+  // retrying 뽑기 in particular would draw again for real). Every sub's
+  // success is public except 채널설정 (admin config feedback, not a channel
+  // announcement) - deferring non-ephemeral everywhere else keeps Discord's
+  // native "[user] used /복권 추첨 ..." attribution; replyEphemeral/
+  // replyPublic route each reply correctly either way.
+  await interaction.deferReply({ ephemeral: sub === "채널설정" });
 
   const guildId = interaction.guild.id;
 
@@ -235,11 +241,7 @@ async function handleDraw(interaction, sub) {
             : "잭팟 보너스 없음 - 즉석복권 꽝이나 이월 시 여기로 쌓여요",
       })
       .setColor(0xf1c40f);
-    // Public replies go out via a plain channel message (see
-    // interactionReply.js), which doesn't carry Discord's automatic
-    // "[user] used /command" attribution - and the embed above is specific
-    // to whoever ran this, so the mention is included directly instead.
-    return replyPublic(interaction, { content: `${interaction.user}`, embeds: [embed] });
+    return replyPublic(interaction, { embeds: [embed] });
   }
 
   if (sub === "시작") {
@@ -258,7 +260,7 @@ async function handleDraw(interaction, sub) {
 
     return replyPublic(interaction, {
       content:
-        `${interaction.user} 🎟️ 추첨 복권을 시작했습니다! 티켓 1장 = ${DEFAULT_TICKET_PRICE.toLocaleString()} 포인트 (1인당 최대 ${maxTickets}장). ` +
+        `🎟️ 추첨 복권을 시작했습니다! 티켓 1장 = ${DEFAULT_TICKET_PRICE.toLocaleString()} 포인트 (1인당 최대 ${maxTickets}장). ` +
         `기본 잭팟 ${SEED_JACKPOT.toLocaleString()} 포인트로 시작합니다. ` +
         `매주 토요일 밤 11:30(미국 동부시간)에 자동 추첨되며, 다음 추첨은 <t:${Math.floor(lottery.drawAt.getTime() / 1000)}:F>입니다. ` +
         "`/복권 추첨 구매`로 참여하세요. 추첨 30분 전엔 이 채널에 공지, 10분 전엔 그때까지 티켓을 산 분들께 알림, 추첨 직후엔 결과까지 이 채널로 보내드려요.",
@@ -275,7 +277,7 @@ async function handleDraw(interaction, sub) {
       return replyEphemeral(interaction, { content: err.message });
     }
     return replyPublic(interaction, {
-      content: `${interaction.user} 추첨 복권을 종료했습니다. 이번 라운드에 구매된 티켓은 전액 환불되었고, 자동 추첨은 더 이상 진행되지 않습니다.`,
+      content: "추첨 복권을 종료했습니다. 이번 라운드에 구매된 티켓은 전액 환불되었고, 자동 추첨은 더 이상 진행되지 않습니다.",
     });
   }
 
@@ -284,7 +286,7 @@ async function handleDraw(interaction, sub) {
     try {
       const lottery = await buyTickets(guildId, interaction.user, count);
       return replyPublic(interaction, {
-        content: `${interaction.user} 🎟️ 티켓 ${count}장을 구매했습니다. 현재 판돈: ${totalPot(lottery).toLocaleString()} 포인트\n${myTicketLine(lottery, interaction.user.id)}`,
+        content: `🎟️ 티켓 ${count}장을 구매했습니다. 현재 판돈: ${totalPot(lottery).toLocaleString()} 포인트\n${myTicketLine(lottery, interaction.user.id)}`,
       });
     } catch (err) {
       return replyEphemeral(interaction, { content: err.message });
@@ -297,7 +299,7 @@ async function handleDraw(interaction, sub) {
     }
     try {
       const result = await runDraw(guildId, interaction.client);
-      return replyPublic(interaction, { content: `${interaction.user} ${formatDrawResultMessage(result)}` });
+      return replyPublic(interaction, { content: formatDrawResultMessage(result) });
     } catch (err) {
       return replyEphemeral(interaction, { content: err.message });
     }

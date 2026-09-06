@@ -20,8 +20,11 @@ module.exports = {
     // Deferred immediately (before any DB work) - a gift is 3 sequential DB
     // round-trips (balance lookup, sender deduction, recipient credit), which
     // can blow past Discord's 3s ack window on a slow connection. See
-    // interactionReply.js for why this matters.
-    await interaction.deferReply({ ephemeral: true });
+    // interactionReply.js for why this matters. Deferred *non-ephemeral*
+    // since the success path (the common case) is always public - keeps
+    // Discord's native "[user] used /포인트선물" attribution; replyEphemeral
+    // routes error replies correctly regardless.
+    await interaction.deferReply({ ephemeral: false });
 
     const target = interaction.options.getUser("유저");
     const amount = interaction.options.getInteger("포인트");

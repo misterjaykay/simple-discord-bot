@@ -22,8 +22,11 @@ async function handleStart(interaction) {
   // Deferred immediately (before any DB work) - a successful start chains
   // several sequential DB round-trips plus an optional cross-channel
   // message send, which can blow past Discord's 3s ack window. See
-  // interactionReply.js for why this matters.
-  await interaction.deferReply({ ephemeral: true });
+  // interactionReply.js for why this matters. Deferred *non-ephemeral* since
+  // the success path (the common case) is always public - keeps Discord's
+  // native "[user] used /펫대전 시작" attribution; replyEphemeral routes
+  // error replies correctly regardless.
+  await interaction.deferReply({ ephemeral: false });
 
   if (!isAdmin(interaction)) {
     return replyEphemeral(interaction, { content: "이 명령어는 서버 관리자만 사용할 수 있어요." });
@@ -70,13 +73,9 @@ async function handleStart(interaction) {
     ? `결과는 <#${config.petTournamentChannelId}>에 공지됩니다.`
     : "결과를 공지할 채널이 아직 지정되지 않았어요. `/펫대전 채널설정`으로 지정해주세요.";
 
-  // Public replies go out via a plain channel message (see
-  // interactionReply.js), which doesn't carry Discord's automatic
-  // "[user] used /command" attribution - so the mention is included
-  // directly in the content instead.
   return replyPublic(interaction, {
     content:
-      `${interaction.user} 🏆 펫 토너먼트를 시작했습니다! 참가비 ${ENTRY_FEE.toLocaleString()} 포인트, 신청은 상시 가능하며 매주 금요일 밤 9시(미국 동부시간) 마감됩니다. ` +
+      `🏆 펫 토너먼트를 시작했습니다! 참가비 ${ENTRY_FEE.toLocaleString()} 포인트, 신청은 상시 가능하며 매주 금요일 밤 9시(미국 동부시간) 마감됩니다. ` +
       `마감 후 밤 11시 30분에 자동으로 대전이 진행됩니다(다음 진행: <t:${Math.floor(tournament.runAt.getTime() / 1000)}:F>). ` +
       `최소 ${MIN_PARTICIPANTS}마리 미만이면 그 주는 취소되고 참가비가 환불돼요. \`/펫대전 신청\`으로 참가하세요 (펫마다 각각 신청할 수 있어요). ${channelNote}`,
   });
@@ -86,8 +85,11 @@ async function handleStop(interaction) {
   // Deferred immediately (before any DB work) - stopWeeklyTournament loops a
   // refund (DB write) per registered pet before replying, which can blow
   // past Discord's 3s ack window on a tournament with many entrants. See
-  // interactionReply.js for why this matters.
-  await interaction.deferReply({ ephemeral: true });
+  // interactionReply.js for why this matters. Deferred *non-ephemeral* since
+  // the success path (the common case) is always public - keeps Discord's
+  // native "[user] used /펫대전 종료" attribution; replyEphemeral routes
+  // error replies correctly regardless.
+  await interaction.deferReply({ ephemeral: false });
 
   if (!isAdmin(interaction)) {
     return replyEphemeral(interaction, { content: "이 명령어는 서버 관리자만 사용할 수 있어요." });
@@ -98,7 +100,7 @@ async function handleStop(interaction) {
     return replyEphemeral(interaction, { content: err.message });
   }
   return replyPublic(interaction, {
-    content: `${interaction.user} 펫 토너먼트를 종료했습니다. 이번 주 신청자에게는 참가비가 전액 환불되었고, 자동 진행은 더 이상 없습니다.`,
+    content: "펫 토너먼트를 종료했습니다. 이번 주 신청자에게는 참가비가 전액 환불되었고, 자동 진행은 더 이상 없습니다.",
   });
 }
 
@@ -123,8 +125,11 @@ async function handleRegister(interaction) {
   // the entry fee via a DB round-trip before replying, which can blow past
   // Discord's 3s ack window on a slow connection. See interactionReply.js
   // for why this matters (a failed reply() after the fee was already
-  // deducted used to look like registration failed).
-  await interaction.deferReply({ ephemeral: true });
+  // deducted used to look like registration failed). Deferred *non-ephemeral*
+  // since the success path (the common case) is always public - keeps
+  // Discord's native "[user] used /펫대전 신청" attribution; replyEphemeral
+  // routes error replies correctly regardless.
+  await interaction.deferReply({ ephemeral: false });
 
   let pet;
   try {
@@ -136,7 +141,7 @@ async function handleRegister(interaction) {
   const petLabel = pet.nickname ? `${pet.nickname}(${pet.speciesName})` : pet.speciesName;
   await replyPublic(interaction, {
     content:
-      `${interaction.user} 🎫 ${petLabel}(${pet.slot}번 슬롯)로 이번 주 펫 토너먼트에 신청했습니다! (참가비 ${ENTRY_FEE.toLocaleString()} 포인트 차감) 금요일 밤 11시 30분(미국 동부시간)에 자동으로 진행됩니다. ` +
+      `🎫 ${petLabel}(${pet.slot}번 슬롯)로 이번 주 펫 토너먼트에 신청했습니다! (참가비 ${ENTRY_FEE.toLocaleString()} 포인트 차감) 금요일 밤 11시 30분(미국 동부시간)에 자동으로 진행됩니다. ` +
       `다른 슬롯의 펫도 \`/펫대전 신청\`으로 추가 등록할 수 있어요.`,
   });
 
