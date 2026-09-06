@@ -55,7 +55,11 @@ module.exports = {
     if (options.length === 1) {
       const result = await evolvePet(interaction.guild.id, interaction.user, pet.slot, options[0].speciesId);
       if (!result.ok) return replyEphemeral(interaction, buildEvolveFailureMessage(result.reason));
-      return replyPublic(interaction, buildEvolvedMessage(result));
+      // Public replies go out via a plain channel message (see
+      // interactionReply.js), which doesn't carry Discord's automatic
+      // "[user] used /command" attribution - so the mention is included
+      // directly in the content instead.
+      return replyPublic(interaction, { ...buildEvolvedMessage(result), content: `${interaction.user}` });
     }
 
     // Ephemeral - the branch picker is private to the owner (componentHandler

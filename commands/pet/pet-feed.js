@@ -55,7 +55,11 @@ module.exports = {
       if (result.skipped.length > 0) lines.push(result.skipped.map(skipReasonText).join("\n"));
       if (lines.length === 0) lines.push("밥을 줄 수 있는 펫이 없어요.");
 
-      await replyPublic(interaction, { content: lines.join("\n") });
+      // Public replies go out via a plain channel message (see
+      // interactionReply.js), which doesn't carry Discord's automatic
+      // "[user] used /command" attribution - so the mention is included
+      // directly in the content instead.
+      await replyPublic(interaction, { content: `${interaction.user} ${lines.join("\n")}` });
       return sendMissionFollowUp(interaction, result.missionResult);
     }
 
@@ -96,7 +100,7 @@ module.exports = {
 
     const levelMsg = result.leveledUp ? ` 🎊 레벨업! 지금 Lv.${result.pet.level}` : "";
     const displayName = result.pet.nickname ?? result.pet.speciesName;
-    await replyPublic(interaction, { content: `🍖 ${displayName}에게 밥을 줬어요!${levelMsg}` });
+    await replyPublic(interaction, { content: `${interaction.user} 🍖 ${displayName}에게 밥을 줬어요!${levelMsg}` });
     await sendMissionFollowUp(interaction, result.missionResult);
   },
 };

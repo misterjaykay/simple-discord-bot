@@ -172,11 +172,11 @@ async function handleScratch(interaction) {
   if (isBigWin) {
     // The defer above was ephemeral (so small/losing results stay quiet) -
     // big wins need to actually be visible in the channel, so this posts the
-    // real result as a public followUp (see interactionReply.js - it edits
-    // the ephemeral placeholder to something trivial rather than deleting
-    // it, since deleting it broke Discord's client-side rendering of the
-    // followUp).
-    await replyPublic(interaction, { embeds: [embed] });
+    // real result as a plain channel message instead (see interactionReply.js).
+    // That message doesn't get Discord's automatic "[user] used /command"
+    // attribution the way an interaction reply would, so the mention is
+    // included directly in the content instead.
+    await replyPublic(interaction, { content: `${interaction.user}`, embeds: [embed] });
   } else {
     await interaction.editReply({ embeds: [embed] });
   }
@@ -235,7 +235,11 @@ async function handleDraw(interaction, sub) {
             : "잭팟 보너스 없음 - 즉석복권 꽝이나 이월 시 여기로 쌓여요",
       })
       .setColor(0xf1c40f);
-    return replyPublic(interaction, { embeds: [embed] });
+    // Public replies go out via a plain channel message (see
+    // interactionReply.js), which doesn't carry Discord's automatic
+    // "[user] used /command" attribution - and the embed above is specific
+    // to whoever ran this, so the mention is included directly instead.
+    return replyPublic(interaction, { content: `${interaction.user}`, embeds: [embed] });
   }
 
   if (sub === "시작") {
@@ -254,7 +258,7 @@ async function handleDraw(interaction, sub) {
 
     return replyPublic(interaction, {
       content:
-        `🎟️ 추첨 복권을 시작했습니다! 티켓 1장 = ${DEFAULT_TICKET_PRICE.toLocaleString()} 포인트 (1인당 최대 ${maxTickets}장). ` +
+        `${interaction.user} 🎟️ 추첨 복권을 시작했습니다! 티켓 1장 = ${DEFAULT_TICKET_PRICE.toLocaleString()} 포인트 (1인당 최대 ${maxTickets}장). ` +
         `기본 잭팟 ${SEED_JACKPOT.toLocaleString()} 포인트로 시작합니다. ` +
         `매주 토요일 밤 11:30(미국 동부시간)에 자동 추첨되며, 다음 추첨은 <t:${Math.floor(lottery.drawAt.getTime() / 1000)}:F>입니다. ` +
         "`/복권 추첨 구매`로 참여하세요. 추첨 30분 전엔 이 채널에 공지, 10분 전엔 그때까지 티켓을 산 분들께 알림, 추첨 직후엔 결과까지 이 채널로 보내드려요.",
@@ -270,7 +274,9 @@ async function handleDraw(interaction, sub) {
     } catch (err) {
       return replyEphemeral(interaction, { content: err.message });
     }
-    return replyPublic(interaction, { content: "추첨 복권을 종료했습니다. 이번 라운드에 구매된 티켓은 전액 환불되었고, 자동 추첨은 더 이상 진행되지 않습니다." });
+    return replyPublic(interaction, {
+      content: `${interaction.user} 추첨 복권을 종료했습니다. 이번 라운드에 구매된 티켓은 전액 환불되었고, 자동 추첨은 더 이상 진행되지 않습니다.`,
+    });
   }
 
   if (sub === "구매") {
@@ -278,7 +284,7 @@ async function handleDraw(interaction, sub) {
     try {
       const lottery = await buyTickets(guildId, interaction.user, count);
       return replyPublic(interaction, {
-        content: `🎟️ 티켓 ${count}장을 구매했습니다. 현재 판돈: ${totalPot(lottery).toLocaleString()} 포인트\n${myTicketLine(lottery, interaction.user.id)}`,
+        content: `${interaction.user} 🎟️ 티켓 ${count}장을 구매했습니다. 현재 판돈: ${totalPot(lottery).toLocaleString()} 포인트\n${myTicketLine(lottery, interaction.user.id)}`,
       });
     } catch (err) {
       return replyEphemeral(interaction, { content: err.message });
@@ -291,7 +297,7 @@ async function handleDraw(interaction, sub) {
     }
     try {
       const result = await runDraw(guildId, interaction.client);
-      return replyPublic(interaction, { content: formatDrawResultMessage(result) });
+      return replyPublic(interaction, { content: `${interaction.user} ${formatDrawResultMessage(result)}` });
     } catch (err) {
       return replyEphemeral(interaction, { content: err.message });
     }

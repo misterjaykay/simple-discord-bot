@@ -37,7 +37,13 @@ module.exports = {
         await new db.Birthday({ userId: id, userName: username, birthday }).save();
       }
 
-      return replyPublic(interaction, { content: `등록되었습니다.\n\`\`\`이름:${username} 생일:${month}월 ${day}일\`\`\`` });
+      // Public replies go out via a plain channel message (see
+      // interactionReply.js), which doesn't carry Discord's automatic
+      // "[user] used /command" attribution - so the mention is included
+      // directly in the content instead.
+      return replyPublic(interaction, {
+        content: `${interaction.user} 등록되었습니다.\n\`\`\`이름:${username} 생일:${month}월 ${day}일\`\`\``,
+      });
     } catch (err) {
       console.error(err);
       return replyEphemeral(interaction, { content: "생일을 등록하는 중 오류가 발생했습니다." });
