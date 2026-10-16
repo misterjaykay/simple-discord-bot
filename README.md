@@ -8,7 +8,7 @@
 ## Description
 > Simple discord bot for little community needs. Runs entirely on slash commands.
 
-Requires **Node.js 22.12+** (needed by `@discordjs/voice`).
+Requires **Node.js 22.12+** (see `engines` in `package.json`).
 
 ---
 
@@ -64,7 +64,6 @@ up for it) - plus a `pm2` + VM alternative if you'd rather self-host for free.
   with a control panel (lock/unlock, hide/reveal, rename, user limit, region,
   bitrate, kick, claim) posted right in the channel's chat, or via `/보이스채널`.
   `/보이스설정 목록` lists every trigger configured for the server.
-- **Music playback** (`/재생`, `/스톱`) via `@discordjs/voice`.
 - **Points + predictions** (Twitch-style betting): everyone starts with 1000
   points automatically (first time they check `/포인트` or place a bet).
   Ongoing points come from two sources: being in a voice channel (10 points
